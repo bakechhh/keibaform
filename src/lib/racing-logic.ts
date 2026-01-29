@@ -74,7 +74,7 @@ export function calculateEfficiency(odds: number): EfficiencyRank {
   if (!odds || odds <= 1) {
     return {
       returnRate: 0,
-      rank: 'C',
+      rank: '-',
       label: '-',
       color: '#94a3b8',
     };
@@ -272,7 +272,7 @@ export function evaluateRace(horses: HorseWithRanks[]): RaceEvaluation {
   const horsesWithAna = horses.filter(h => h.analysis);
 
   const getEfficiencyScore = (rank: string | undefined): number => {
-    const scores: Record<string, number> = { 'SS': 5, 'S': 4, 'A': 3, 'B': 2, 'C': 1 };
+    const scores: Record<string, number> = { 'SS': 5, 'S': 4, 'A': 3, 'B': 2, 'C': 1, '-': 0 };
     return rank ? (scores[rank] || 0) : 0;
   };
 
@@ -440,4 +440,38 @@ export function calculateOverallRating(horse: RawHorse, powerRank: number, total
 // バッジをシンプルな文字列配列に変換（UI表示用）
 export function badgesToStrings(badges: Badge[]): string[] {
   return badges.map(b => b.style === 'gap' ? `${b.text}(${b.val})` : b.text);
+}
+
+/**
+ * 偏差値を計算
+ * @param value 対象の値
+ * @param values 全体の値の配列
+ * @returns 偏差値（平均50、標準偏差10）
+ */
+export function calculateDeviationScore(value: number, values: number[]): number {
+  if (values.length === 0) return 50;
+
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+  const stdDev = Math.sqrt(variance);
+
+  if (stdDev === 0) return 50;
+
+  return 50 + ((value - mean) / stdDev) * 10;
+}
+
+/**
+ * 順位から偏差値を計算（順位ベース）
+ * @param rank 順位（1が最上位）
+ * @param totalHorses 全頭数
+ * @returns 偏差値
+ */
+export function calculateRankDeviationScore(rank: number, totalHorses: number): number {
+  if (totalHorses <= 1) return 50;
+
+  // 順位を0-1のスケールに変換（1位が1.0、最下位が0.0）
+  const normalizedPosition = (totalHorses - rank) / (totalHorses - 1);
+
+  // 偏差値に変換（1位が約70、最下位が約30になるよう調整）
+  return 30 + normalizedPosition * 40;
 }

@@ -43,9 +43,15 @@ function transformPastRaces(rawPastRaces?: RawPastRace[]): PastRace[] {
     condition: pr.track_condition,
     runningStyle: pr.running_style,
     last3f: pr.last_3f,
+    ave3f: pr.ave_3f,
     margin: pr.margin,
     correctedTime: pr.corrected_time,
     pci: pr.pci,
+    frame: parseInt(pr.frame, 10) || 0,
+    horseNumber: parseInt(pr.horse_number, 10) || 0,
+    weight: pr.weight,
+    weightReduction: pr.weight_reduction,
+    position3f: pr.position_3f,
   }));
 }
 
@@ -151,6 +157,7 @@ function transformRaceData(
 
   return {
     id: rawRace.race_id,
+    originalRaceId: rawRace.race_id, // オッズ検索用の元のrace_id
     name: rawRace.race_name || `${rawRace.place}${rawRace.round}R`,
     date: new Date().toISOString().split('T')[0],
     location: rawRace.place,
@@ -391,6 +398,7 @@ export function useRaceData() {
 
       // レースデータを変換
       const transformedRaces: Race[] = [];
+      let raceIndex = 0;
       for (const row of raceResult.data || []) {
         const rawRace = row.data as RawRaceData;
         const odds = oddsMap.get(row.race_id) || null;
@@ -398,6 +406,11 @@ export function useRaceData() {
         const raceResultData = raceResultsMap.get(row.race_id);
 
         const race = transformRaceData(rawRace, odds);
+        // race_idが重複する可能性があるため、インデックスを追加してユニークにする
+        race.id = `${row.race_id}-${raceIndex}`;
+        // オッズ検索用にデータベースカラムのrace_idを使用（JSON内のrace_idとは異なる場合がある）
+        race.originalRaceId = row.race_id;
+        raceIndex++;
 
         // 馬場状態を設定
         if (trackCondition) {

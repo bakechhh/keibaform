@@ -173,7 +173,7 @@ export interface HorseStats {
 }
 
 export interface EfficiencyRank {
-  rank: 'SS' | 'S' | 'A' | 'B' | 'C';
+  rank: 'SS' | 'S' | 'A' | 'B' | 'C' | '-';
   label: string;
   returnRate: number;
   color: string;
@@ -192,9 +192,15 @@ export interface PastRace {
   condition: string;
   runningStyle: string;
   last3f: number;
+  ave3f: number;
   margin: number;
   correctedTime: number;
   pci: number;
+  frame: number;
+  horseNumber: number;
+  weight: number;
+  weightReduction: string;
+  position3f: number;
 }
 
 export interface Horse {
@@ -253,6 +259,7 @@ export interface Horse {
 
 export interface Race {
   id: string;
+  originalRaceId: string; // オッズ検索用の元のrace_id（例: "京都2R"）
   name: string;
   date: string;
   location: string;
@@ -288,6 +295,60 @@ export interface OddsDisplay {
   umatan: { combination: string; odds: number }[];
   sanrenpuku: { combination: string; odds: number }[];
   sanrentan: { combination: string; odds: number }[];
+}
+
+// ===== フィルター状態 =====
+
+export interface RaceFilterState {
+  date: string | null;
+  venue: string | null;
+}
+
+// ===== 詳細フィルター =====
+
+export type ComparisonOperator = '>=' | '<=' | '=' | '>' | '<';
+
+export interface NumericFilter {
+  enabled: boolean;
+  operator: ComparisonOperator;
+  value: number;
+}
+
+export interface HorseFilters {
+  // 効率ランク
+  efficiencyRank: {
+    enabled: boolean;
+    minRank: 'SS' | 'S' | 'A' | 'B' | 'C' | '-';
+  };
+  // AI指数
+  aiWinRate: NumericFilter;
+  aiPlaceRate: NumericFilter;
+  aiShowRate: NumericFilter;
+  // その他指数
+  finalScore: NumericFilter;
+  miningIndex: NumericFilter;
+  raceEval: NumericFilter;
+  ziDeviation: NumericFilter;
+  powerScore: NumericFilter;
+  // オッズ
+  tanshoOdds: NumericFilter;
+  // 人気
+  popularity: NumericFilter;
+}
+
+export interface RaceFilters {
+  // レースタイプ
+  raceType: {
+    enabled: boolean;
+    types: Array<'SUPER' | 'GOOD' | 'SOLID' | 'CHAOS' | 'NORMAL' | 'KEN'>;
+  };
+  // オッズ条件
+  noLowOdds: {
+    enabled: boolean;
+    threshold: number; // この倍率以下の馬がいないレース
+  };
+  // 1番人気オッズ条件
+  favoriteOdds: NumericFilter;
 }
 
 // ===== レース結果表示用 =====

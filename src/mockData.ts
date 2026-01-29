@@ -103,9 +103,15 @@ const createMockHorse = (
         condition: '良',
         runningStyle: '先',
         last3f: 35.5,
+        ave3f: 36.0,
         margin: 0.3,
         correctedTime: 98,
         pci: 45.0,
+        frame: number,
+        horseNumber: number,
+        weight: 57,
+        weightReduction: '',
+        position3f: 0.2,
       },
     ],
   };
@@ -114,6 +120,7 @@ const createMockHorse = (
 export const mockRaces: Race[] = [
   {
     id: 'mock-tokyo-1r',
+    originalRaceId: 'mock-tokyo-1r',
     name: 'サンプル新馬戦',
     date: new Date().toISOString().split('T')[0],
     location: '東京',
@@ -140,6 +147,7 @@ export const mockRaces: Race[] = [
   },
   {
     id: 'mock-tokyo-2r',
+    originalRaceId: 'mock-tokyo-2r',
     name: 'サンプル未勝利',
     date: new Date().toISOString().split('T')[0],
     location: '東京',
