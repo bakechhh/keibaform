@@ -19,9 +19,61 @@ import {
   HorseWithRanks,
 } from '../lib/racing-logic';
 
-// キャッシュ
-let cachedRaces: Race[] | null = null;
-let cacheDate: string | null = null;
+// キャッシュ設定
+const CACHE_KEY = 'umaai-race-data-cache';
+const CACHE_EXPIRY_MS = 10 * 60 * 1000; // 10分
+
+interface CacheData {
+  races: Race[];
+  timestamp: number;
+  date: string;
+}
+
+// メモリキャッシュ
+let memoryCache: CacheData | null = null;
+
+// localStorageからキャッシュを読み込み
+function loadCacheFromStorage(): CacheData | null {
+  try {
+    const stored = localStorage.getItem(CACHE_KEY);
+    if (stored) {
+      return JSON.parse(stored) as CacheData;
+    }
+  } catch (e) {
+    console.warn('Failed to load cache from localStorage:', e);
+  }
+  return null;
+}
+
+// localStorageにキャッシュを保存
+function saveCacheToStorage(data: CacheData): void {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Failed to save cache to localStorage:', e);
+  }
+}
+
+// キャッシュが有効かチェック
+function isCacheValid(cache: CacheData | null): boolean {
+  if (!cache) return false;
+
+  const now = Date.now();
+  const today = new Date().toISOString().split('T')[0];
+
+  // 日付が変わったらキャッシュ無効
+  if (cache.date !== today) return false;
+
+  // 10分以内ならキャッシュ有効
+  return (now - cache.timestamp) < CACHE_EXPIRY_MS;
+}
+
+// キャッシュの残り時間を取得（秒）
+function getCacheRemainingTime(cache: CacheData | null): number {
+  if (!cache) return 0;
+  const remaining = CACHE_EXPIRY_MS - (Date.now() - cache.timestamp);
+  return Math.max(0, Math.floor(remaining / 1000));
+}
 
 // 馬番を数値に変換するヘルパー
 function parseHorseNum(num: number | string): number {
@@ -332,6 +384,20 @@ export function useRaceData() {
   const [races, setRaces] = useState<Race[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [cacheRemaining, setCacheRemaining] = useState(0);
+
+  // キャッシュ残り時間の更新
+  useEffect(() => {
+    const updateRemaining = () => {
+      const cache = memoryCache || loadCacheFromStorage();
+      setCacheRemaining(getCacheRemainingTime(cache));
+    };
+
+    updateRemaining();
+    const interval = setInterval(updateRemaining, 1000);
+    return () => clearInterval(interval);
+  }, [lastUpdated]);
 
   const loadRaces = useCallback(async (forceRefresh = false) => {
     // Supabaseが設定されていない場合はモックデータを使用
@@ -342,12 +408,25 @@ export function useRaceData() {
       return;
     }
 
-    // キャッシュチェック
-    const today = new Date().toISOString().split('T')[0];
-    if (!forceRefresh && cachedRaces && cacheDate === today) {
-      setRaces(cachedRaces);
-      setLoading(false);
-      return;
+    // キャッシュチェック（強制更新でなければ）
+    if (!forceRefresh) {
+      // メモリキャッシュを確認
+      if (isCacheValid(memoryCache)) {
+        setRaces(memoryCache!.races);
+        setLastUpdated(new Date(memoryCache!.timestamp));
+        setLoading(false);
+        return;
+      }
+
+      // localStorageキャッシュを確認
+      const storedCache = loadCacheFromStorage();
+      if (isCacheValid(storedCache)) {
+        memoryCache = storedCache;
+        setRaces(storedCache!.races);
+        setLastUpdated(new Date(storedCache!.timestamp));
+        setLoading(false);
+        return;
+      }
     }
 
     try {
@@ -434,10 +513,18 @@ export function useRaceData() {
       });
 
       // キャッシュ更新
-      cachedRaces = transformedRaces;
-      cacheDate = today;
+      const now = Date.now();
+      const today = new Date().toISOString().split('T')[0];
+      const newCache: CacheData = {
+        races: transformedRaces,
+        timestamp: now,
+        date: today,
+      };
+      memoryCache = newCache;
+      saveCacheToStorage(newCache);
 
       setRaces(transformedRaces);
+      setLastUpdated(new Date(now));
     } catch (err) {
       console.error('Failed to load race data:', err);
       setError(err instanceof Error ? err.message : 'データの取得に失敗しました');
@@ -458,7 +545,7 @@ export function useRaceData() {
     loadRaces();
   }, [loadRaces]);
 
-  return { races, loading, error, refreshData };
+  return { races, loading, error, refreshData, lastUpdated, cacheRemaining };
 }
 
 export function useOddsData(raceId: string | null) {

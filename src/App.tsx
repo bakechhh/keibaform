@@ -67,7 +67,7 @@ export default function App() {
   const [horseFilters, setHorseFilters] = useState<HorseFilters>(defaultHorseFilters);
   const [raceFilters, setRaceFilters] = useState<RaceFilters>(defaultRaceFilters);
 
-  const { races, loading, error, refreshData } = useRaceData();
+  const { races, loading, error, refreshData, lastUpdated, cacheRemaining } = useRaceData();
   const { odds: oddsData, loading: oddsLoading } = useOddsData(selectedRace?.originalRaceId || null);
 
   // レース結果データ
@@ -324,19 +324,31 @@ export default function App() {
               </div>
             </motion.div>
 
-            <div className="flex items-center gap-4">
-              <motion.button
-                onClick={refreshData}
-                className="p-2 rounded-lg hover:bg-emerald-500/20 transition-colors"
-                whileHover={{ rotate: 180 }}
-                transition={{ duration: 0.3 }}
-                disabled={loading}
-              >
-                <RefreshCw
-                  className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`}
-                  style={{ color: 'var(--text-secondary)' }}
-                />
-              </motion.button>
+            <div className="flex items-center gap-2 sm:gap-4">
+              {/* Cache Status & Refresh */}
+              <div className="flex items-center gap-1">
+                {cacheRemaining > 0 && !loading && (
+                  <span
+                    className="text-xs hidden sm:inline"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    {Math.floor(cacheRemaining / 60)}:{String(cacheRemaining % 60).padStart(2, '0')}
+                  </span>
+                )}
+                <motion.button
+                  onClick={refreshData}
+                  className="p-2 rounded-lg hover:bg-emerald-500/20 transition-colors"
+                  whileHover={{ rotate: 180 }}
+                  transition={{ duration: 0.3 }}
+                  disabled={loading}
+                  title={lastUpdated ? `最終更新: ${lastUpdated.toLocaleTimeString('ja-JP')}` : '更新'}
+                >
+                  <RefreshCw
+                    className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`}
+                    style={{ color: 'var(--text-secondary)' }}
+                  />
+                </motion.button>
+              </div>
               <ThemeToggle isDark={isDark} onToggle={() => setIsDark(!isDark)} />
             </div>
           </div>
