@@ -213,13 +213,13 @@ export default function HorseModal({ horse, isOpen, onClose }: HorseModalProps) 
                     AI予測 & 指数
                   </h3>
                   <div className="space-y-3">
-                    <GameStatusBar label="WIN" value={horse.winRate} color="#ef4444" />
-                    <GameStatusBar label="PLC" value={horse.placeRate} color="#3b82f6" />
-                    <GameStatusBar label="SHW" value={Math.round(horse.predictions.show_rate * 100)} color="#22c55e" />
+                    <GameStatusBar label="AI単勝" value={horse.winRate} color="#ef4444" />
+                    <GameStatusBar label="AI連対" value={horse.placeRate} color="#3b82f6" />
+                    <GameStatusBar label="AI複勝" value={Math.round(horse.predictions.show_rate * 100)} color="#22c55e" />
                     <div className="border-t border-[var(--border)] my-2" />
-                    <GameStatusBar label="総合" value={Math.round(horse.indices.final_score)} color="#f59e0b" />
-                    <GameStatusBar label="掘出" value={Math.round(horse.indices.mining_index)} color="#8b5cf6" />
-                    <GameStatusBar label="基礎" value={Math.round(horse.indices.base_score)} color="#06b6d4" />
+                    <GameStatusBar label="最終Sc" value={Math.round(horse.indices.final_score)} color="#f59e0b" />
+                    <GameStatusBar label="Mining" value={Math.round(horse.indices.mining_index)} color="#8b5cf6" />
+                    <GameStatusBar label="基礎Sc" value={Math.round(horse.indices.base_score)} color="#06b6d4" />
                   </div>
                 </motion.div>
               </div>

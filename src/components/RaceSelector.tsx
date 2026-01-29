@@ -87,12 +87,27 @@ export default function RaceSelector({ races, selectedRace, onSelect }: RaceSele
 
           {/* Condition & Evaluation Description */}
           <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
-            <span
-              className="text-xs px-2 py-1 rounded"
-              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
-            >
-              馬場: {race.condition}
-            </span>
+            <div className="flex gap-2">
+              <span
+                className="text-xs px-2 py-1 rounded"
+                style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
+              >
+                {race.condition}
+              </span>
+              {race.trackCondition && (
+                <span
+                  className={`text-xs px-2 py-1 rounded font-medium ${
+                    race.trackCondition === '良' ? 'bg-green-500/20 text-green-400' :
+                    race.trackCondition === '稍重' ? 'bg-yellow-500/20 text-yellow-400' :
+                    race.trackCondition === '重' ? 'bg-orange-500/20 text-orange-400' :
+                    race.trackCondition === '不良' ? 'bg-red-500/20 text-red-400' :
+                    'bg-gray-500/20 text-gray-400'
+                  }`}
+                >
+                  {race.trackCondition}
+                </span>
+              )}
+            </div>
             {race.evaluation && (
               <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                 {race.evaluation.description}

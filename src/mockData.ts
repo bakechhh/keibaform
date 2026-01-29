@@ -93,7 +93,20 @@ const createMockHorse = (
     winRate: Math.round(winRate * 100),
     placeRate: Math.round(placeRate * 100),
     pastRaces: [
-      { date: '2024-12-01', raceName: 'サンプルレース', position: number, time: '1:35.2', distance: 1600, condition: '良' },
+      {
+        date: '2024.12.1',
+        raceName: 'サンプルレース',
+        position: number.toString(),
+        place: '東京',
+        distance: 1600,
+        surface: '芝',
+        condition: '良',
+        runningStyle: '先',
+        last3f: 35.5,
+        margin: 0.3,
+        correctedTime: 98,
+        pci: 45.0,
+      },
     ],
   };
 };

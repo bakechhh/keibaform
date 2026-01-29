@@ -4,8 +4,12 @@ import {
   Race,
   Horse,
   OddsDisplay,
+  PastRace,
   RawRaceData,
   RawOddsEntry,
+  RawRaceResult,
+  RawPastRace,
+  RaceResultDisplay,
 } from '../types';
 import {
   getHorseColor,
@@ -18,6 +22,32 @@ import {
 // キャッシュ
 let cachedRaces: Race[] | null = null;
 let cacheDate: string | null = null;
+
+// 馬番を数値に変換するヘルパー
+function parseHorseNum(num: number | string): number {
+  return typeof num === 'string' ? parseInt(num, 10) : num;
+}
+
+// 過去レースを変換するヘルパー
+function transformPastRaces(rawPastRaces?: RawPastRace[]): PastRace[] {
+  if (!rawPastRaces || rawPastRaces.length === 0) {
+    return [];
+  }
+  return rawPastRaces.map(pr => ({
+    date: pr.date,
+    raceName: pr.race_name,
+    position: pr.rank,
+    place: pr.place,
+    distance: parseInt(pr.distance, 10) || 0,
+    surface: pr.surface,
+    condition: pr.track_condition,
+    runningStyle: pr.running_style,
+    last3f: pr.last_3f,
+    margin: pr.margin,
+    correctedTime: pr.corrected_time,
+    pci: pr.pci,
+  }));
+}
 
 // 生データを表示用に変換
 function transformRaceData(
@@ -32,19 +62,28 @@ function transformRaceData(
     const tfwOdds = oddsData.find(o => o.odds_type === 'tfw');
     if (tfwOdds?.data.tansho) {
       tfwOdds.data.tansho.forEach(t => {
-        tanshoOddsMap.set(t.horse_num, t.odds);
+        tanshoOddsMap.set(parseHorseNum(t.horse_num), t.odds);
       });
     }
     if (tfwOdds?.data.fukusho) {
       tfwOdds.data.fukusho.forEach(f => {
-        fukushoOddsMap.set(f.horse_num, f.odds);
+        fukushoOddsMap.set(parseHorseNum(f.horse_num), f.odds);
       });
     }
   }
 
-  // RawHorseをHorseWithRanksに変換
+  // 単勝オッズから人気を計算（オッズ昇順でソート→順位が人気）
+  const popularityMap = new Map<number, number>();
+  const sortedOdds = Array.from(tanshoOddsMap.entries()).sort((a, b) => a[1] - b[1]);
+  sortedOdds.forEach(([horseNum], index) => {
+    popularityMap.set(horseNum, index + 1); // 1人気から始まる
+  });
+
+  // RawHorseをHorseWithRanksに変換（人気を設定）
   const horsesWithRanks: HorseWithRanks[] = rawRace.horses.map(h => ({
     ...h,
+    // 人気はオッズから計算、なければ生データの値を使用
+    popularity: popularityMap.get(h.horse_number) ?? h.popularity ?? 99,
   }));
 
   // 競馬脳ロジックでレース分析を実行
@@ -56,12 +95,17 @@ function transformRaceData(
     const stats = convertToStats(h);
     const overallRating = calculateOverallRating(h, h.powerRank ?? 99, rawRace.horses.length);
 
+    // jockeyがオブジェクトか文字列かを判定
+    const jockeyName = typeof h.jockey === 'object' && h.jockey !== null
+      ? h.jockey.name
+      : (h.jockey || '未定');
+
     return {
       id: `${rawRace.race_id}-${h.horse_number}`,
       name: h.horse_name,
       number: h.horse_number,
-      jockey: h.jockey || '未定',
-      popularity: h.popularity,
+      jockey: jockeyName,
+      popularity: h.popularity ?? 99,
       color: getHorseColor(h.horse_number),
       predictions: h.predictions,
       indices: h.indices,
@@ -80,7 +124,7 @@ function transformRaceData(
       overallRating,
       winRate: Math.round(h.predictions.win_rate * 100),
       placeRate: Math.round(h.predictions.place_rate * 100),
-      pastRaces: [],
+      pastRaces: transformPastRaces(h.past_races),
     };
   });
 
@@ -125,6 +169,7 @@ function transformOddsData(oddsData: RawOddsEntry[]): OddsDisplay {
   const result: OddsDisplay = {
     tansho: [],
     fukusho: [],
+    wakuren: [],
     umaren: [],
     wide: [],
     umatan: [],
@@ -137,17 +182,25 @@ function transformOddsData(oddsData: RawOddsEntry[]): OddsDisplay {
       case 'tfw':
         if (entry.data.tansho) {
           result.tansho = entry.data.tansho.map(t => ({
-            horseNum: t.horse_num,
+            horseNum: parseHorseNum(t.horse_num),
             horseName: t.horse_name,
             odds: t.odds,
           }));
         }
         if (entry.data.fukusho) {
           result.fukusho = entry.data.fukusho.map(f => ({
-            horseNum: f.horse_num,
+            horseNum: parseHorseNum(f.horse_num),
             horseName: f.horse_name,
             min: f.odds.min,
             max: f.odds.max,
+          }));
+        }
+        break;
+      case 'wakuren':
+        if (entry.data.combinations) {
+          result.wakuren = entry.data.combinations.map(c => ({
+            combination: c.combination,
+            odds: typeof c.odds === 'number' ? c.odds : c.odds.min,
           }));
         }
         break;
@@ -198,6 +251,76 @@ function transformOddsData(oddsData: RawOddsEntry[]): OddsDisplay {
   return result;
 }
 
+// レース結果データを表示用に変換
+function transformRaceResultData(rawResult: RawRaceResult): RaceResultDisplay {
+  const payouts: RaceResultDisplay['payouts'] = {};
+
+  // 払戻データの変換
+  if (rawResult.払戻) {
+    if (rawResult.払戻.単勝) {
+      payouts.tansho = rawResult.払戻.単勝.map(p => ({
+        combination: p.組み合わせ,
+        payout: parseInt(p.払出, 10),
+      }));
+    }
+    if (rawResult.払戻.複勝) {
+      payouts.fukusho = rawResult.払戻.複勝.map(p => ({
+        combination: p.組み合わせ,
+        payout: parseInt(p.払出, 10),
+      }));
+    }
+    if (rawResult.払戻.枠連) {
+      payouts.wakuren = rawResult.払戻.枠連.map(p => ({
+        combination: p.組み合わせ,
+        payout: parseInt(p.払出, 10),
+      }));
+    }
+    if (rawResult.払戻.馬連) {
+      payouts.umaren = rawResult.払戻.馬連.map(p => ({
+        combination: p.組み合わせ,
+        payout: parseInt(p.払出, 10),
+      }));
+    }
+    if (rawResult.払戻.馬単) {
+      payouts.umatan = rawResult.払戻.馬単.map(p => ({
+        combination: p.組み合わせ,
+        payout: parseInt(p.払出, 10),
+      }));
+    }
+    if (rawResult.払戻.ワイド) {
+      payouts.wide = rawResult.払戻.ワイド.map(p => ({
+        combination: p.組み合わせ,
+        payout: parseInt(p.払出, 10),
+      }));
+    }
+    if (rawResult.払戻['3連複']) {
+      payouts.sanrenpuku = rawResult.払戻['3連複'].map(p => ({
+        combination: p.組み合わせ,
+        payout: parseInt(p.払出, 10),
+      }));
+    }
+    if (rawResult.払戻['3連単']) {
+      payouts.sanrentan = rawResult.払戻['3連単'].map(p => ({
+        combination: p.組み合わせ,
+        payout: parseInt(p.払出, 10),
+      }));
+    }
+  }
+
+  // 着順データの変換
+  const finishOrder = rawResult.着順?.map(f => ({
+    position: parseInt(f.着順, 10),
+    horseName: f.馬名,
+    horseNum: parseInt(f.馬番, 10),
+  })) || [];
+
+  return {
+    date: rawResult.date,
+    payouts,
+    finishOrder,
+  };
+}
+
 export function useRaceData() {
   const [races, setRaces] = useState<Race[]>([]);
   const [loading, setLoading] = useState(true);
@@ -224,14 +347,25 @@ export function useRaceData() {
       setLoading(true);
       setError(null);
 
-      // レースデータとオッズデータを並列取得
-      const [raceResult, oddsResult] = await Promise.all([
+      // レースデータ、オッズデータ、馬場状態、レース結果を並列取得
+      const [raceResult, oddsResult, trackResult, resultsResult] = await Promise.all([
         supabase.from('race_data_json').select('race_id, data'),
         supabase.from('race_odds_json').select('race_id, data'),
+        supabase.from('track_conditions').select('race_id, track_condition'),
+        supabase.from('race_results').select('race_id, data'),
       ]);
 
       if (raceResult.error) throw raceResult.error;
-      if (oddsResult.error) throw oddsResult.error;
+      if (oddsResult.error) {
+        console.warn('オッズデータ取得エラー:', oddsResult.error);
+      }
+      // 馬場状態とレース結果はオプショナルなのでエラーは警告のみ
+      if (trackResult.error) {
+        console.warn('馬場状態データ取得エラー:', trackResult.error);
+      }
+      if (resultsResult.error) {
+        console.warn('レース結果データ取得エラー:', resultsResult.error);
+      }
 
       // オッズをマップに変換
       const oddsMap = new Map<string, RawOddsEntry[]>();
@@ -239,12 +373,43 @@ export function useRaceData() {
         oddsMap.set(row.race_id, row.data as RawOddsEntry[]);
       }
 
+      // 馬場状態をマップに変換
+      const trackConditionMap = new Map<string, string>();
+      for (const row of trackResult.data || []) {
+        trackConditionMap.set(row.race_id, row.track_condition);
+      }
+
+      // レース結果をマップに変換
+      const raceResultsMap = new Map<string, RawRaceResult>();
+      for (const row of resultsResult.data || []) {
+        // dataがJSON文字列の場合はパース
+        const resultData = typeof row.data === 'string'
+          ? JSON.parse(row.data) as RawRaceResult
+          : row.data as RawRaceResult;
+        raceResultsMap.set(row.race_id, resultData);
+      }
+
       // レースデータを変換
       const transformedRaces: Race[] = [];
       for (const row of raceResult.data || []) {
         const rawRace = row.data as RawRaceData;
         const odds = oddsMap.get(row.race_id) || null;
-        transformedRaces.push(transformRaceData(rawRace, odds));
+        const trackCondition = trackConditionMap.get(row.race_id);
+        const raceResultData = raceResultsMap.get(row.race_id);
+
+        const race = transformRaceData(rawRace, odds);
+
+        // 馬場状態を設定
+        if (trackCondition) {
+          race.trackCondition = trackCondition;
+        }
+
+        // レース結果を設定
+        if (raceResultData) {
+          race.result = transformRaceResultData(raceResultData);
+        }
+
+        transformedRaces.push(race);
       }
 
       // 場所→ラウンド順でソート

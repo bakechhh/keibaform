@@ -16,11 +16,17 @@ interface PerformanceChartProps {
 }
 
 export default function PerformanceChart({ pastRaces, color }: PerformanceChartProps) {
-  const data = [...pastRaces].reverse().map((race) => ({
+  // 有効なレースのみ（除外、取消等を除く）
+  const validRaces = pastRaces.filter(race => {
+    const pos = typeof race.position === 'string' ? parseInt(race.position, 10) : race.position;
+    return !isNaN(pos) && pos > 0;
+  });
+
+  const data = [...validRaces].reverse().map((race) => ({
     name: race.raceName.slice(0, 6),
-    position: race.position,
+    position: typeof race.position === 'string' ? parseInt(race.position, 10) : race.position,
     date: race.date,
-    fullName: race.raceName,
+    fullName: `${race.place} ${race.raceName} ${race.surface}${race.distance}m`,
   }));
 
   return (
