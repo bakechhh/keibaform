@@ -7,7 +7,7 @@
 import { Horse, Bet, RaceBets, Race, OddsDisplay } from '../types';
 
 // ===== 購入金額デフォルト =====
-export const DEFAULT_TANSHO_AMOUNT = 400;
+export const DEFAULT_TANSHO_AMOUNT = 100;
 export const DEFAULT_WIDE_AMOUNT = 100;
 export const DEFAULT_UMAREN_AMOUNT = 100;
 const BET_AMOUNT_BOUSOU = 100;

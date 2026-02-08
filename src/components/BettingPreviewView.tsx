@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, Calculator, X, Check } from 'lucide-react';
 import {
   Race,
   OddsDisplay,
@@ -21,6 +21,419 @@ import { useBettingPreview } from '../hooks/useBettingPreview';
 interface BettingPreviewViewProps {
   race: Race;
   odds: OddsDisplay | null;
+}
+
+// ===== 合成オッズ計算 =====
+function calculateSyntheticOdds(bets: Bet[]): number | null {
+  const validBets = bets.filter(b => b.odds > 0);
+  if (validBets.length === 0) return null;
+  const sum = validBets.reduce((acc, b) => acc + 1 / b.odds, 0);
+  if (sum === 0) return null;
+  return 1 / sum;
+}
+
+function syntheticOddsFromArray(oddsArr: number[]): number | null {
+  const valid = oddsArr.filter(o => o > 0);
+  if (valid.length === 0) return null;
+  const sum = valid.reduce((acc, o) => acc + 1 / o, 0);
+  if (sum === 0) return null;
+  return 1 / sum;
+}
+
+// 三連複/三連単のオッズマップ構築
+function buildSanrenpukuOddsMap(odds: OddsDisplay | null): Map<string, number> {
+  const map = new Map<string, number>();
+  if (!odds) return map;
+  for (const entry of odds.sanrenpuku) {
+    const nums = entry.combination.split(/[-=]/).map(Number).sort((a, b) => a - b);
+    if (nums.length === 3) {
+      map.set(nums.join('-'), entry.odds);
+    }
+  }
+  return map;
+}
+
+function buildSanrentanOddsMap(odds: OddsDisplay | null): Map<string, number> {
+  const map = new Map<string, number>();
+  if (!odds) return map;
+  for (const entry of odds.sanrentan) {
+    map.set(entry.combination, entry.odds);
+  }
+  return map;
+}
+
+// フォーメーションの合成オッズ計算
+function calcFormationSyntheticOdds(
+  pattern: FormationPattern,
+  type: '三連複' | '三連単',
+  spOddsMap: Map<string, number>,
+  stOddsMap: Map<string, number>,
+): number | null {
+  if (type === '三連複') {
+    const combos = pattern.combos;
+    if (!combos || combos.length === 0) return null;
+    let sum = 0;
+    let found = 0;
+    for (const combo of combos) {
+      const key = [...combo].sort((a, b) => a - b).join('-');
+      const odds = spOddsMap.get(key);
+      if (odds && odds > 0) {
+        sum += 1 / odds;
+        found++;
+      }
+    }
+    if (found === 0) return null;
+    return 1 / sum;
+  } else {
+    let sum = 0;
+    let found = 0;
+    for (const a of pattern.col1) {
+      for (const b of pattern.col2) {
+        if (b === a) continue;
+        for (const c of pattern.col3) {
+          if (c === a || c === b) continue;
+          const key = `${a}-${b}-${c}`;
+          const odds = stOddsMap.get(key);
+          if (odds && odds > 0) {
+            sum += 1 / odds;
+            found++;
+          }
+        }
+      }
+    }
+    if (found === 0) return null;
+    return 1 / sum;
+  }
+}
+
+// 合成オッズバッジ
+function SyntheticOddsBadge({ odds }: { odds: number | null }) {
+  if (odds === null) return null;
+  const color = odds >= 2.0 ? 'text-emerald-400' : odds >= 1.0 ? 'text-amber-400' : 'text-red-400';
+  return (
+    <span className={`text-[10px] font-mono font-bold ${color}`}>
+      合成{odds.toFixed(2)}倍
+    </span>
+  );
+}
+
+// ===== 資金配分ロジック =====
+
+interface AllocationItem {
+  label: string;
+  odds: number;
+  allocatedAmount: number;
+  expectedPayout: number;
+}
+
+function calculateAllocation(
+  items: { label: string; odds: number }[],
+  budget: number,
+): AllocationItem[] {
+  const validItems = items.filter(i => i.odds > 0);
+  if (validItems.length === 0 || budget <= 0) return [];
+
+  const synOdds = syntheticOddsFromArray(validItems.map(i => i.odds));
+  if (!synOdds) return [];
+
+  return validItems.map(item => {
+    const raw = (budget * synOdds) / item.odds;
+    const allocatedAmount = Math.max(100, Math.round(raw / 100) * 100);
+    return {
+      label: item.label,
+      odds: item.odds,
+      allocatedAmount,
+      expectedPayout: Math.round(allocatedAmount * item.odds),
+    };
+  });
+}
+
+// フォーメーションの個別組み合わせ+オッズを取得
+function getFormationItems(
+  pattern: FormationPattern,
+  type: '三連複' | '三連単',
+  spOddsMap: Map<string, number>,
+  stOddsMap: Map<string, number>,
+): { label: string; odds: number }[] {
+  if (type === '三連複') {
+    const combos = pattern.combos;
+    if (!combos) return [];
+    return combos
+      .map(combo => {
+        const key = [...combo].sort((a, b) => a - b).join('-');
+        const odds = spOddsMap.get(key);
+        return odds ? { label: key, odds } : null;
+      })
+      .filter((x): x is { label: string; odds: number } => x !== null);
+  } else {
+    const items: { label: string; odds: number }[] = [];
+    for (const a of pattern.col1) {
+      for (const b of pattern.col2) {
+        if (b === a) continue;
+        for (const c of pattern.col3) {
+          if (c === a || c === b) continue;
+          const key = `${a}-${b}-${c}`;
+          const odds = stOddsMap.get(key);
+          if (odds) {
+            items.push({ label: key, odds });
+          }
+        }
+      }
+    }
+    return items;
+  }
+}
+
+// ===== クリップボード用フォーマット =====
+
+function formatModeBetsText(label: string, raceBets: RaceBets): string {
+  const synOdds = calculateSyntheticOdds(raceBets.bets);
+  let text = `【${label}】合計: ${raceBets.totalAmount.toLocaleString()}円 (${raceBets.bets.length}点)`;
+  if (synOdds) text += ` 合成: ${synOdds.toFixed(2)}倍`;
+  text += '\n';
+  for (const bet of raceBets.bets) {
+    let line = `${bet.type} ${bet.umaban}`;
+    if (bet.umaban2 > 0) {
+      line += bet.type === 'ワイド' ? `→${bet.umaban2}` : `=${bet.umaban2}`;
+    }
+    line += ` ${bet.amount}円`;
+    if (bet.odds > 0) line += ` (${bet.odds.toFixed(1)}倍)`;
+    if (bet.reason) line += ` [${bet.reason}]`;
+    text += line + '\n';
+  }
+  return text.trim();
+}
+
+function formatFormationText(
+  pattern: FormationPattern,
+  type: '三連複' | '三連単',
+  synOdds: number | null,
+): string {
+  let text = `【${type} ${pattern.name}】${pattern.count}点 ${pattern.amount.toLocaleString()}円`;
+  if (synOdds) text += ` 合成: ${synOdds.toFixed(2)}倍`;
+  text += '\n';
+  const p1 = type === '三連複' ? '1列目' : '1着';
+  const p2 = type === '三連複' ? '2列目' : '2着';
+  const p3 = type === '三連複' ? '3列目' : '3着';
+  text += `${p1}: ${pattern.col1.join(', ')}\n`;
+  text += `${p2}: ${pattern.col2.join(', ')}\n`;
+  text += `${p3}: ${pattern.col3.join(', ')}`;
+  return text;
+}
+
+function formatAllocationText(
+  title: string,
+  budget: number,
+  items: AllocationItem[],
+): string {
+  const total = items.reduce((s, i) => s + i.allocatedAmount, 0);
+  let text = `【${title} 資金配分】予算: ${budget.toLocaleString()}円 → 合計: ${total.toLocaleString()}円\n`;
+  for (const item of items) {
+    text += `${item.label} ${item.allocatedAmount.toLocaleString()}円 (${item.odds.toFixed(1)}倍) → 的中時 ${item.expectedPayout.toLocaleString()}円\n`;
+  }
+  return text.trim();
+}
+
+// ===== 共通UIパーツ =====
+
+function CopyButton({ getText }: { getText: () => string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={async (e) => {
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(getText());
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          // clipboard API unavailable
+        }
+      }}
+      className={`p-1 rounded transition-colors ${copied ? 'text-emerald-400' : 'hover:bg-white/10'}`}
+      style={{ color: copied ? undefined : 'var(--text-secondary)' }}
+      title={copied ? 'コピー済' : 'コピー'}
+    >
+      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+    </button>
+  );
+}
+
+function AllocateButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className="p-1 rounded hover:bg-white/10 transition-colors"
+      style={{ color: 'var(--text-secondary)' }}
+      title="資金配分"
+    >
+      <Calculator className="w-3.5 h-3.5" />
+    </button>
+  );
+}
+
+// ===== 資金配分モーダル =====
+
+function FundAllocationModal({
+  title,
+  items: rawItems,
+  onClose,
+}: {
+  title: string;
+  items: { label: string; odds: number }[];
+  onClose: () => void;
+}) {
+  const [budget, setBudget] = useState(0);
+  const [allocations, setAllocations] = useState<AllocationItem[]>([]);
+  const [copied, setCopied] = useState(false);
+
+  const handleCalculate = () => {
+    if (budget <= 0) return;
+    setAllocations(calculateAllocation(rawItems, budget));
+  };
+
+  const total = allocations.reduce((s, i) => s + i.allocatedAmount, 0);
+  const minPayout = allocations.length > 0
+    ? Math.min(...allocations.map(i => i.expectedPayout))
+    : 0;
+  const minReturnRate = total > 0 ? Math.round((minPayout / total) * 100) : 0;
+
+  const handleCopy = async () => {
+    const text = formatAllocationText(title, budget, allocations);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard API unavailable
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        onClick={e => e.stopPropagation()}
+        className="relative w-full max-w-md max-h-[80vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden"
+        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-2">
+            <Calculator className="w-4 h-4 text-blue-400" />
+            <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+              {title} 資金配分
+            </h3>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-white/10">
+            <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+          </button>
+        </div>
+
+        {/* Budget input */}
+        <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="text-xs block mb-1" style={{ color: 'var(--text-secondary)' }}>
+                予算 (円)
+              </label>
+              <input
+                type="number"
+                step={1000}
+                min={rawItems.length * 100}
+                value={budget || ''}
+                onChange={e => setBudget(Number(e.target.value) || 0)}
+                onKeyDown={e => { if (e.key === 'Enter') handleCalculate(); }}
+                placeholder={`最低 ${(rawItems.length * 100).toLocaleString()}円`}
+                className="w-full px-3 py-2 rounded-lg text-sm border font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+            <motion.button
+              onClick={handleCalculate}
+              className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-bold"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              配分計算
+            </motion.button>
+          </div>
+          <div className="mt-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+            {rawItems.length}点 × 100円 = 最低 {(rawItems.length * 100).toLocaleString()}円
+          </div>
+        </div>
+
+        {/* Results */}
+        {allocations.length > 0 && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {/* Summary */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-3 text-xs">
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  合計: <span className="font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
+                    {total.toLocaleString()}円
+                  </span>
+                </span>
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  最低払戻: <span className="font-bold font-mono text-emerald-400">
+                    {minPayout.toLocaleString()}円
+                  </span>
+                </span>
+              </div>
+              <span className={`text-xs font-bold ${minReturnRate >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                最低回収率: {minReturnRate}%
+              </span>
+            </div>
+
+            {/* Allocation table */}
+            <div className="space-y-1">
+              {allocations.map((item, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between px-2 py-1.5 rounded text-xs"
+                  style={{ backgroundColor: 'var(--bg-secondary)' }}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono font-bold flex-shrink-0" style={{ color: 'var(--text-primary)' }}>
+                      {item.label}
+                    </span>
+                    <span className="font-mono text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                      {item.odds.toFixed(1)}倍
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+                    <span className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
+                      {item.allocatedAmount.toLocaleString()}円
+                    </span>
+                    <span className="font-mono text-[10px] text-emerald-400">
+                      →{item.expectedPayout.toLocaleString()}円
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Copy button */}
+            <motion.button
+              onClick={handleCopy}
+              className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                copied ? 'bg-emerald-500/20 text-emerald-400' : 'border'
+              }`}
+              style={copied ? undefined : { borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+            >
+              {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+              {copied ? 'コピーしました' : '配分結果をコピー'}
+            </motion.button>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
 }
 
 // ===== BettingConfigPanel =====
@@ -108,20 +521,24 @@ function CompareSummaryBar({ compare }: { compare: CompareResult }) {
       className="p-3 rounded-xl border flex items-center gap-4 flex-wrap"
       style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
     >
-      {modes.map(m => (
-        <div key={m.key} className="flex items-center gap-2">
-          <span className={`w-3 h-3 rounded-full ${m.color}`} />
-          <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-            {m.label}
-          </span>
-          <span className="text-sm font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
-            {m.data ? `${m.data.totalAmount.toLocaleString()}円` : '-'}
-          </span>
-          <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-            ({m.data?.bets.length ?? 0}点)
-          </span>
-        </div>
-      ))}
+      {modes.map(m => {
+        const synOdds = m.data ? calculateSyntheticOdds(m.data.bets) : null;
+        return (
+          <div key={m.key} className="flex items-center gap-2">
+            <span className={`w-3 h-3 rounded-full ${m.color}`} />
+            <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+              {m.label}
+            </span>
+            <span className="text-sm font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
+              {m.data ? `${m.data.totalAmount.toLocaleString()}円` : '-'}
+            </span>
+            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              ({m.data?.bets.length ?? 0}点)
+            </span>
+            <SyntheticOddsBadge odds={synOdds} />
+          </div>
+        );
+      })}
       <div className="ml-auto flex items-center gap-2">
         <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>合計</span>
         <span className="text-sm font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
@@ -141,11 +558,13 @@ function ModeColumn({
   colorClass,
   borderColorClass,
   raceBets,
+  onAllocate,
 }: {
   label: string;
   colorClass: string;
   borderColorClass: string;
   raceBets: RaceBets | null;
+  onAllocate: (title: string, items: { label: string; odds: number }[]) => void;
 }) {
   if (!raceBets || raceBets.bets.length === 0) {
     return (
@@ -162,6 +581,16 @@ function ModeColumn({
   const tansho = raceBets.bets.filter(b => b.type === '単勝');
   const wide = raceBets.bets.filter(b => b.type === 'ワイド');
   const umaren = raceBets.bets.filter(b => b.type === '馬連');
+  const allSynOdds = calculateSyntheticOdds(raceBets.bets);
+  const allocatableBets = raceBets.bets.filter(b => b.odds > 0);
+
+  const handleAllocate = () => {
+    const items = allocatableBets.map(b => ({
+      label: `${b.type} ${b.umaban}${b.umaban2 > 0 ? (b.type === 'ワイド' ? '→' : '=') + b.umaban2 : ''}`,
+      odds: b.odds,
+    }));
+    onAllocate(label, items);
+  };
 
   return (
     <div
@@ -169,10 +598,19 @@ function ModeColumn({
       style={{ backgroundColor: 'var(--bg-card)' }}
     >
       <div className="flex items-center justify-between">
-        <h4 className={`text-sm font-bold ${colorClass}`}>{label}</h4>
-        <span className="text-xs font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
-          {raceBets.totalAmount.toLocaleString()}円
-        </span>
+        <div className="flex items-center gap-2">
+          <h4 className={`text-sm font-bold ${colorClass}`}>{label}</h4>
+          <SyntheticOddsBadge odds={allSynOdds} />
+        </div>
+        <div className="flex items-center gap-1">
+          <CopyButton getText={() => formatModeBetsText(label, raceBets)} />
+          {allocatableBets.length > 0 && (
+            <AllocateButton onClick={handleAllocate} />
+          )}
+          <span className="text-xs font-mono font-bold ml-1" style={{ color: 'var(--text-primary)' }}>
+            {raceBets.totalAmount.toLocaleString()}円
+          </span>
+        </div>
       </div>
 
       {tansho.length > 0 && (
@@ -189,10 +627,21 @@ function ModeColumn({
 }
 
 function BetSection({ title, bets }: { title: string; bets: Bet[] }) {
+  const synOdds = calculateSyntheticOdds(bets);
+  const totalAmount = bets.reduce((sum, b) => sum + b.amount, 0);
+
   return (
     <div>
-      <div className="text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-        {title} ({bets.length}点)
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>
+            {title} ({bets.length}点)
+          </span>
+          <SyntheticOddsBadge odds={synOdds} />
+        </div>
+        <span className="text-[10px] font-mono" style={{ color: 'var(--text-secondary)' }}>
+          計{totalAmount.toLocaleString()}円
+        </span>
       </div>
       <div className="space-y-1">
         {bets.map((bet, i) => (
@@ -283,30 +732,49 @@ function ScoredHorsesRanking({ scoredHorses }: { scoredHorses: ScoredHorse[] }) 
 }
 
 // ===== FormationCard =====
-function FormationCard({ pattern, type }: { pattern: FormationPattern; type: '三連複' | '三連単' }) {
+function FormationCard({
+  pattern, type, spOddsMap, stOddsMap, onAllocate,
+}: {
+  pattern: FormationPattern;
+  type: '三連複' | '三連単';
+  spOddsMap: Map<string, number>;
+  stOddsMap: Map<string, number>;
+  onAllocate: (title: string, items: { label: string; odds: number }[]) => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
+  const synOdds = calcFormationSyntheticOdds(pattern, type, spOddsMap, stOddsMap);
+  const formItems = getFormationItems(pattern, type, spOddsMap, stOddsMap);
 
   return (
     <div
       className="p-3 rounded-xl border"
       style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
     >
-      <button
+      <div
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between text-left"
+        className="w-full flex items-center justify-between text-left cursor-pointer"
       >
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-base">{pattern.emoji}</span>
           <div className="min-w-0">
-            <span className="text-sm font-bold block" style={{ color: 'var(--text-primary)' }}>
-              {pattern.name}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                {pattern.name}
+              </span>
+              <SyntheticOddsBadge odds={synOdds} />
+            </div>
             <span className="text-[10px] block truncate" style={{ color: 'var(--text-secondary)' }}>
               {pattern.description}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+          <div className="flex items-center" onClick={e => e.stopPropagation()}>
+            <CopyButton getText={() => formatFormationText(pattern, type, synOdds)} />
+            {formItems.length > 0 && (
+              <AllocateButton onClick={() => onAllocate(`${type} ${pattern.name}`, formItems)} />
+            )}
+          </div>
           <span className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
             {pattern.count}点
           </span>
@@ -319,7 +787,7 @@ function FormationCard({ pattern, type }: { pattern: FormationPattern; type: '�
             <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
           )}
         </div>
-      </button>
+      </div>
 
       <AnimatePresence>
         {isOpen && (
@@ -398,7 +866,14 @@ function FormationCard({ pattern, type }: { pattern: FormationPattern; type: '�
 }
 
 // ===== FormationSection =====
-function FormationSection({ formations }: { formations: FormationResult }) {
+function FormationSection({
+  formations, spOddsMap, stOddsMap, onAllocate,
+}: {
+  formations: FormationResult;
+  spOddsMap: Map<string, number>;
+  stOddsMap: Map<string, number>;
+  onAllocate: (title: string, items: { label: string; odds: number }[]) => void;
+}) {
   const [showSanrenpuku, setShowSanrenpuku] = useState(true);
 
   return (
@@ -439,7 +914,7 @@ function FormationSection({ formations }: { formations: FormationResult }) {
           >
             {formations.sanrenpuku.length > 0 ? (
               formations.sanrenpuku.map((p, i) => (
-                <FormationCard key={i} pattern={p} type="三連複" />
+                <FormationCard key={i} pattern={p} type="三連複" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} />
               ))
             ) : (
               <p className="text-xs p-3" style={{ color: 'var(--text-secondary)' }}>
@@ -457,7 +932,7 @@ function FormationSection({ formations }: { formations: FormationResult }) {
           >
             {formations.sanrentan.length > 0 ? (
               formations.sanrentan.map((p, i) => (
-                <FormationCard key={i} pattern={p} type="三連単" />
+                <FormationCard key={i} pattern={p} type="三連単" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} />
               ))
             ) : (
               <p className="text-xs p-3" style={{ color: 'var(--text-secondary)' }}>
@@ -475,6 +950,16 @@ function FormationSection({ formations }: { formations: FormationResult }) {
 export default function BettingPreviewView({ race, odds }: BettingPreviewViewProps) {
   const { config, setConfig, compareResult, formationResult } = useBettingPreview(race, odds);
 
+  // 三連系オッズマップ
+  const spOddsMap = buildSanrenpukuOddsMap(odds);
+  const stOddsMap = buildSanrentanOddsMap(odds);
+
+  // 資金配分モーダル
+  const [allocationTarget, setAllocationTarget] = useState<{
+    title: string;
+    items: { label: string; odds: number }[];
+  } | null>(null);
+
   return (
     <div className="space-y-4">
       {/* Config Panel */}
@@ -491,18 +976,21 @@ export default function BettingPreviewView({ race, odds }: BettingPreviewViewPro
             colorClass="text-blue-400"
             borderColorClass="border-blue-500/30"
             raceBets={compareResult.normal}
+            onAllocate={(title, items) => setAllocationTarget({ title, items })}
           />
           <ModeColumn
             label="裏モード"
             colorClass="text-orange-400"
             borderColorClass="border-orange-500/30"
             raceBets={compareResult.ura}
+            onAllocate={(title, items) => setAllocationTarget({ title, items })}
           />
           <ModeColumn
             label="暴走モード"
             colorClass="text-purple-400"
             borderColorClass="border-purple-500/30"
             raceBets={compareResult.bousou}
+            onAllocate={(title, items) => setAllocationTarget({ title, items })}
           />
         </div>
       )}
@@ -514,7 +1002,12 @@ export default function BettingPreviewView({ race, odds }: BettingPreviewViewPro
 
       {/* Formation Section */}
       {formationResult && (formationResult.sanrenpuku.length > 0 || formationResult.sanrentan.length > 0) && (
-        <FormationSection formations={formationResult} />
+        <FormationSection
+          formations={formationResult}
+          spOddsMap={spOddsMap}
+          stOddsMap={stOddsMap}
+          onAllocate={(title, items) => setAllocationTarget({ title, items })}
+        />
       )}
 
       {/* Empty state */}
@@ -528,6 +1021,17 @@ export default function BettingPreviewView({ race, odds }: BettingPreviewViewPro
           </p>
         </div>
       )}
+
+      {/* Fund Allocation Modal */}
+      <AnimatePresence>
+        {allocationTarget && (
+          <FundAllocationModal
+            title={allocationTarget.title}
+            items={allocationTarget.items}
+            onClose={() => setAllocationTarget(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
