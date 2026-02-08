@@ -68,7 +68,7 @@ export function getHorseColor(horseNumber: number): string {
 }
 
 /**
- * 単勝オッズから資金効率ランクを計算
+ * 単勝オッズから資金効率ランクを計算（10段階）
  */
 export function calculateEfficiency(odds: number): EfficiencyRank {
   if (!odds || odds <= 1) {
@@ -83,18 +83,30 @@ export function calculateEfficiency(odds: number): EfficiencyRank {
   const returnRate = Math.round(odds * 100);
 
   if (returnRate >= 2000) {
-    return { returnRate, rank: 'SS', label: '🔥超効率', color: '#dc2626' };
+    return { returnRate, rank: 'SS', label: '超効率', color: '#dc2626' };
   }
   if (returnRate >= 1000) {
-    return { returnRate, rank: 'S', label: '🔥高効率', color: '#ea580c' };
+    return { returnRate, rank: 'S', label: '高効率', color: '#ea580c' };
+  }
+  if (returnRate >= 600) {
+    return { returnRate, rank: 'A+', label: '効率優', color: '#d97706' };
   }
   if (returnRate >= 400) {
-    return { returnRate, rank: 'A', label: '✅効率的', color: '#16a34a' };
+    return { returnRate, rank: 'A', label: '効率的', color: '#16a34a' };
+  }
+  if (returnRate >= 300) {
+    return { returnRate, rank: 'B+', label: '準効率', color: '#65a30d' };
   }
   if (returnRate >= 250) {
-    return { returnRate, rank: 'B', label: '⚠️標準', color: '#ca8a04' };
+    return { returnRate, rank: 'B', label: '標準', color: '#ca8a04' };
   }
-  return { returnRate, rank: 'C', label: '❌非効率', color: '#6b7280' };
+  if (returnRate >= 200) {
+    return { returnRate, rank: 'C+', label: '準標準', color: '#a16207' };
+  }
+  if (returnRate >= 150) {
+    return { returnRate, rank: 'C', label: '非効率', color: '#6b7280' };
+  }
+  return { returnRate, rank: 'D', label: '低効率', color: '#94a3b8' };
 }
 
 /**
@@ -272,7 +284,7 @@ export function evaluateRace(horses: HorseWithRanks[]): RaceEvaluation {
   const horsesWithAna = horses.filter(h => h.analysis);
 
   const getEfficiencyScore = (rank: string | undefined): number => {
-    const scores: Record<string, number> = { 'SS': 5, 'S': 4, 'A': 3, 'B': 2, 'C': 1, '-': 0 };
+    const scores: Record<string, number> = { 'SS': 8, 'S': 7, 'A+': 6, 'A': 5, 'B+': 4, 'B': 3, 'C+': 2, 'C': 1, 'D': 0, '-': 0 };
     return rank ? (scores[rank] || 0) : 0;
   };
 
@@ -290,9 +302,9 @@ export function evaluateRace(horses: HorseWithRanks[]): RaceEvaluation {
     }
   });
 
-  const axisIsEfficient = bestAxisEffScore >= 3;  // A以上
-  const axisIsStandard = bestAxisEffScore === 2;  // B
-  const axisIsInefficient = bestAxisEffScore <= 1; // C以下
+  const axisIsEfficient = bestAxisEffScore >= 5;  // A以上
+  const axisIsStandard = bestAxisEffScore >= 3 && bestAxisEffScore <= 4;  // B〜B+
+  const axisIsInefficient = bestAxisEffScore <= 2; // C+以下
 
   // 妙味馬の抽出
   const valueLikeStatuses = ['value', 'value_high', 'axis_value'];
@@ -300,7 +312,7 @@ export function evaluateRace(horses: HorseWithRanks[]): RaceEvaluation {
   const valueCount = valueHorses.length;
 
   const hasHighEfficiencyValue = valueHorses.some(h =>
-    getEfficiencyScore(h.efficiency?.rank) >= 4
+    getEfficiencyScore(h.efficiency?.rank) >= 7
   );
 
   // デフォルト

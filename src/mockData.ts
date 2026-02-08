@@ -89,6 +89,7 @@ const createMockHorse = (
       isBuy: number <= 4,
       badges,
     },
+    battleMining: 0,
     overallRating: Math.round(90 - (number - 1) * 5),
     winRate: Math.round(winRate * 100),
     placeRate: Math.round(placeRate * 100),

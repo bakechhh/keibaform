@@ -182,6 +182,7 @@ function transformRaceData(
       overallRating,
       winRate: Math.round(h.predictions.win_rate * 100),
       placeRate: Math.round(h.predictions.place_rate * 100),
+      battleMining: h.battle_mining ?? 0,
       pastRaces: transformPastRaces(h.past_races),
     };
   });

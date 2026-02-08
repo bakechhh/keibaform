@@ -172,8 +172,10 @@ export interface HorseStats {
   technique: number;    // レース評価偏差 (corrected_time_deviation正規化)
 }
 
+export type EfficiencyRankGrade = 'SS' | 'S' | 'A+' | 'A' | 'B+' | 'B' | 'C+' | 'C' | 'D' | '-';
+
 export interface EfficiencyRank {
-  rank: 'SS' | 'S' | 'A' | 'B' | 'C' | '-';
+  rank: EfficiencyRankGrade;
   label: string;
   returnRate: number;
   color: string;
@@ -248,6 +250,9 @@ export interface Horse {
     }>;
   };
 
+  // 暴走モード用
+  battleMining: number;
+
   // 総合評価（表示用）
   overallRating: number;
   winRate: number;
@@ -318,7 +323,7 @@ export interface HorseFilters {
   // 効率ランク
   efficiencyRank: {
     enabled: boolean;
-    minRank: 'SS' | 'S' | 'A' | 'B' | 'C' | '-';
+    minRank: EfficiencyRankGrade;
   };
   // AI指数
   aiWinRate: NumericFilter;
@@ -366,4 +371,74 @@ export interface RaceResultDisplay {
     sanrentan?: { combination: string; payout: number }[];
   };
   finishOrder: { position: number; horseName: string; horseNum: number }[];
+}
+
+// ===== 馬券プレビュー型 =====
+
+export interface Bet {
+  type: '単勝' | 'ワイド' | '馬連';
+  umaban: number;
+  umaban2: number;
+  name: string;
+  amount: number;
+  reason: string;
+  odds: number;
+}
+
+export interface RaceBets {
+  venue: string;
+  raceNum: number;
+  totalAmount: number;
+  bets: Bet[];
+}
+
+export interface ModeResult {
+  mode: 'normal' | 'ura' | 'bousou';
+  label: string;
+  raceBets: RaceBets | null;
+}
+
+export interface CompareResult {
+  normal: RaceBets | null;
+  ura: RaceBets | null;
+  bousou: RaceBets | null;
+}
+
+export interface ScoredHorse {
+  umaban: number;
+  name: string;
+  odds: number;
+  statusJp: string;
+  effRank: string;
+  score: number;
+  rank: 'S' | 'A' | 'B' | 'C' | '-';
+  modesCount: number;
+  normalScore: number;
+  uraScore: number;
+  bousouScore: number;
+}
+
+export interface FormationPattern {
+  name: string;
+  emoji: string;
+  description: string;
+  col1: number[];
+  col2: number[];
+  col3: number[];
+  count: number;
+  amount: number;
+  combos?: number[][];
+}
+
+export interface FormationResult {
+  sanrenpuku: FormationPattern[];
+  sanrentan: FormationPattern[];
+  scoredHorses: ScoredHorse[];
+}
+
+export interface BettingConfig {
+  tanshoAmount: number;
+  wideAmount: number;
+  umarenAmount: number;
+  skipLowOdds: boolean;
 }

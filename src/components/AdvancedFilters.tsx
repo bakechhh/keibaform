@@ -10,7 +10,7 @@ interface AdvancedFiltersProps {
   activeFilterCount: number;
 }
 
-const efficiencyRankOptions = ['SS', 'S', 'A', 'B', 'C', '-'] as const;
+const efficiencyRankOptions = ['SS', 'S', 'A+', 'A', 'B+', 'B', 'C+', 'C', 'D', '-'] as const;
 const operatorOptions: { value: ComparisonOperator; label: string }[] = [
   { value: '>=', label: '以上' },
   { value: '<=', label: '以下' },
@@ -344,6 +344,6 @@ export function applyNumericFilter(value: number, filter: NumericFilter): boolea
 }
 
 export function getEfficiencyRankOrder(rank: string): number {
-  const order: Record<string, number> = { 'SS': 0, 'S': 1, 'A': 2, 'B': 3, 'C': 4, '-': 5 };
-  return order[rank] ?? 5;
+  const order: Record<string, number> = { 'SS': 0, 'S': 1, 'A+': 2, 'A': 3, 'B+': 4, 'B': 5, 'C+': 6, 'C': 7, 'D': 8, '-': 9 };
+  return order[rank] ?? 9;
 }

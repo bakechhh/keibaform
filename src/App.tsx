@@ -18,6 +18,7 @@ import RaceFilterPanel from './components/RaceFilterPanel';
 import RaceNavigation from './components/RaceNavigation';
 import RaceResultsView from './components/RaceResultsView';
 import ExpectedValueAnalysis from './components/ExpectedValueAnalysis';
+import BettingPreviewView from './components/BettingPreviewView';
 import ExportPanel from './components/ExportPanel';
 import FilterTemplateSelector from './components/FilterTemplateSelector';
 import { FilterCondition, applyFilterConditions } from './hooks/useFilterTemplates';
@@ -29,7 +30,7 @@ import AdvancedFilters, {
 } from './components/AdvancedFilters';
 
 type SortOption = 'number' | 'odds' | 'rating' | 'power' | 'popularity' | 'ai_win' | 'ai_place' | 'ai_show' | 'final_score' | 'mining' | 'race_eval' | 'zi';
-type ViewMode = 'horses' | 'odds' | 'analysis' | 'results';
+type ViewMode = 'horses' | 'odds' | 'analysis' | 'results' | 'betting';
 type AnalysisTab = 'overview' | 'expected_value';
 
 export default function App() {
@@ -524,6 +525,24 @@ export default function App() {
                 <span className="ml-1 w-2 h-2 rounded-full bg-emerald-400" />
               )}
             </motion.button>
+            <motion.button
+              onClick={() => setViewMode('betting')}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors
+                ${viewMode === 'betting'
+                  ? 'bg-blue-500 text-white'
+                  : 'border border-[var(--border)]'
+                }
+              `}
+              style={{
+                color: viewMode === 'betting' ? undefined : 'var(--text-secondary)',
+              }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Calculator className="w-4 h-4" />
+              馬券
+            </motion.button>
 
             {/* Race Navigation */}
             <div className="ml-auto">
@@ -662,6 +681,25 @@ export default function App() {
                 loading={resultsLoading}
                 raceName={`${selectedRace.location}${selectedRace.round}R ${selectedRace.name}`}
               />
+            </motion.section>
+          )}
+        </AnimatePresence>
+
+        {/* Betting Preview View */}
+        <AnimatePresence mode="wait">
+          {viewMode === 'betting' && selectedRace && (
+            <motion.section
+              key="betting"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="p-4 rounded-2xl"
+              style={{ backgroundColor: 'var(--bg-card)' }}
+            >
+              <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
+                馬券プレビュー
+              </h3>
+              <BettingPreviewView race={selectedRace} odds={oddsData} />
             </motion.section>
           )}
         </AnimatePresence>

@@ -74,7 +74,7 @@ export default function ExpectedValueAnalysis({ horses, totalHorses }: ExpectedV
     // - 単勝エッジ > 0 かつ Z得点 > 0.5 なら妙味あり
     // - 効率ランクも考慮
     const efficiency = data.horse.efficiency.rank;
-    const isGoodEfficiency = ['SS', 'S', 'A'].includes(efficiency);
+    const isGoodEfficiency = ['SS', 'S', 'A+', 'A'].includes(efficiency);
 
     // バリューベット判定
     // Z得点が高い（平均より0.8σ以上）かつ効率ランクが良い
