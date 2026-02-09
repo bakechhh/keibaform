@@ -136,16 +136,49 @@ function calculateAllocation(
   const synOdds = syntheticOddsFromArray(validItems.map(i => i.odds));
   if (!synOdds) return [];
 
-  return validItems.map(item => {
-    const raw = (budget * synOdds) / item.odds;
-    const allocatedAmount = Math.max(100, Math.round(raw / 100) * 100);
-    return {
-      label: item.label,
-      odds: item.odds,
-      allocatedAmount,
-      expectedPayout: Math.round(allocatedAmount * item.odds),
-    };
-  });
+  // Step 1: Floor to 100 yen units (minimum 100 per item)
+  const result = validItems.map(item => ({
+    label: item.label,
+    odds: item.odds,
+    allocatedAmount: Math.max(100, Math.floor((budget * synOdds / item.odds) / 100) * 100),
+    expectedPayout: 0,
+  }));
+
+  // Step 2: If total exceeds budget (due to min 100), reduce from lowest-odds items first
+  let total = result.reduce((s, r) => s + r.allocatedAmount, 0);
+  if (total > budget) {
+    const byOddsAsc = [...result.keys()].sort((a, b) => result[a].odds - result[b].odds);
+    for (const i of byOddsAsc) {
+      while (total > budget && result[i].allocatedAmount > 100) {
+        result[i].allocatedAmount -= 100;
+        total -= 100;
+      }
+      if (total <= budget) break;
+    }
+  }
+
+  // Step 3: Distribute remaining budget — add 100 to item with lowest expected payout
+  let remaining = budget - total;
+  while (remaining >= 100) {
+    let minIdx = 0;
+    let minPayout = result[0].allocatedAmount * result[0].odds;
+    for (let i = 1; i < result.length; i++) {
+      const p = result[i].allocatedAmount * result[i].odds;
+      if (p < minPayout) {
+        minPayout = p;
+        minIdx = i;
+      }
+    }
+    result[minIdx].allocatedAmount += 100;
+    remaining -= 100;
+  }
+
+  // Step 4: Calculate expected payouts
+  for (const r of result) {
+    r.expectedPayout = Math.round(r.allocatedAmount * r.odds);
+  }
+
+  return result;
 }
 
 // フォーメーションの個別組み合わせ+オッズを取得
