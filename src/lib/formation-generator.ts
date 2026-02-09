@@ -196,7 +196,7 @@ function sanrenpukuHonsenA(sh: ScoredHorse[]): FormationPattern | null {
   const b = getRankedUmabans(sh, 'B');
   const col1 = s.length > 0 ? s.slice(0, 1) : a.slice(0, 1);
   const col2 = a.slice(0, 5);
-  const col3 = b.slice(0, 7);
+  const col3 = b.slice(0, 10);
   if (col1.length === 0 || col2.length < 2 || col3.length < 2) return null;
   const count = countSanrenpuku(col1, col2, col3);
   return {
@@ -210,7 +210,7 @@ function sanrenpukuHonsenA(sh: ScoredHorse[]): FormationPattern | null {
 function sanrenpukuHonsenB(sh: ScoredHorse[]): FormationPattern | null {
   const col1 = getTopN(sh, 2);
   const col2 = getRankedUmabans(sh, 'A').slice(0, 5);
-  const col3 = getRankedUmabans(sh, 'B').slice(0, 7);
+  const col3 = getRankedUmabans(sh, 'B').slice(0, 10);
   if (col1.length < 2 || col2.length < 2 || col3.length < 2) return null;
   const count = countSanrenpuku(col1, col2, col3);
   return {
@@ -224,7 +224,7 @@ function sanrenpukuHonsenB(sh: ScoredHorse[]): FormationPattern | null {
 function sanrenpuku2Jiku(sh: ScoredHorse[]): FormationPattern | null {
   const top = getTopN(sh, 2);
   if (top.length < 2) return null;
-  const col3 = getRankedUmabans(sh, 'B').filter(u => !top.includes(u)).slice(0, 7);
+  const col3 = getRankedUmabans(sh, 'B').filter(u => !top.includes(u)).slice(0, 10);
   if (col3.length < 2) return null;
   const count = countSanrenpuku([top[0]], [top[1]], col3);
   return {
@@ -241,7 +241,7 @@ function sanrenpukuAna(sh: ScoredHorse[]): FormationPattern | null {
     .sort((a, b) => (b.uraScore + b.bousouScore) - (a.uraScore + a.bousouScore));
   const col1 = ana.slice(0, 3).map(h => h.umaban);
   const col2 = getRankedUmabans(sh, 'A').slice(0, 5);
-  const col3 = getRankedUmabans(sh, 'B').slice(0, 7);
+  const col3 = getRankedUmabans(sh, 'B').slice(0, 10);
   if (col1.length === 0 || col2.length < 2 || col3.length < 2) return null;
   const count = countSanrenpuku(col1, col2, col3);
   return {
@@ -255,7 +255,7 @@ function sanrenpukuAna(sh: ScoredHorse[]): FormationPattern | null {
 function sanrenpukuHimo(sh: ScoredHorse[]): FormationPattern | null {
   const col1 = getTopN(sh, 2);
   const col2 = getRankedUmabans(sh, 'A').slice(0, 6);
-  const col3 = getRankedUmabans(sh, 'C').slice(0, 9);
+  const col3 = getRankedUmabans(sh, 'C').slice(0, 12);
   if (col1.length < 1 || col2.length < 2 || col3.length < 3) return null;
   const count = countSanrenpuku(col1, col2, col3);
   return {
@@ -269,7 +269,7 @@ function sanrenpukuHimo(sh: ScoredHorse[]): FormationPattern | null {
 function sanrenpukuEfficiency(sh: ScoredHorse[]): FormationPattern | null {
   const col1 = sh.filter(h => effScore(h.effRank) >= effScore('A') && h.score >= 2).slice(0, 3).map(h => h.umaban);
   const col2 = sh.filter(h => effScore(h.effRank) >= effScore('B+') && h.score >= 1).slice(0, 5).map(h => h.umaban);
-  const col3 = getRankedUmabans(sh, 'C').slice(0, 7);
+  const col3 = getRankedUmabans(sh, 'C').slice(0, 10);
   if (col1.length < 1 || col2.length < 2 || col3.length < 3) return null;
   const count = countSanrenpuku(col1, col2, col3);
   return {
@@ -290,7 +290,7 @@ function sanrentanKenjitsu(sh: ScoredHorse[]): FormationPattern | null {
   let col1 = normalTop.filter(h => h.normalScore >= 3).slice(0, 2).map(h => h.umaban);
   if (col1.length === 0) col1 = getTopN(sh, 1);
   const col2 = getRankedUmabans(sh, 'A').slice(0, 5);
-  const col3 = getRankedUmabans(sh, 'B').slice(0, 7);
+  const col3 = getRankedUmabans(sh, 'B').slice(0, 10);
   if (col1.length === 0 || col2.length < 2 || col3.length < 2) return null;
   const count = countSanrentan(col1, col2, col3);
   return {
@@ -316,7 +316,7 @@ function sanrentanGyakuten(sh: ScoredHorse[]): FormationPattern | null {
     .slice(0, 3)
     .map(h => h.umaban);
   const col2 = getRankedUmabans(sh, 'A').slice(0, 5);
-  const col3 = getRankedUmabans(sh, 'B').slice(0, 7);
+  const col3 = getRankedUmabans(sh, 'B').slice(0, 10);
   if (col1.length === 0 || col2.length < 2 || col3.length < 2) return null;
   const count = countSanrentan(col1, col2, col3);
   return {
@@ -333,7 +333,7 @@ function sanrentanOana(sh: ScoredHorse[]): FormationPattern | null {
     .sort((a, b) => (b.uraScore + b.bousouScore) - (a.uraScore + a.bousouScore));
   const col1 = ana.slice(0, 3).map(h => h.umaban);
   const col2 = getRankedUmabans(sh, 'A').slice(0, 5);
-  const col3 = getRankedUmabans(sh, 'B').slice(0, 7);
+  const col3 = getRankedUmabans(sh, 'B').slice(0, 10);
   if (col1.length === 0 || col2.length < 2 || col3.length < 2) return null;
   const count = countSanrentan(col1, col2, col3);
   return {
@@ -382,7 +382,7 @@ function sanrentanBox(sh: ScoredHorse[]): FormationPattern | null {
 function sanrentanSniper(sh: ScoredHorse[]): FormationPattern | null {
   const col1 = getTopN(sh, 1);
   const col2 = getRankedUmabans(sh, 'A').filter(u => !col1.includes(u)).slice(0, 5);
-  const col3 = getRankedUmabans(sh, 'C').filter(u => !col1.includes(u)).slice(0, 8);
+  const col3 = getRankedUmabans(sh, 'C').filter(u => !col1.includes(u)).slice(0, 10);
   if (col1.length === 0 || col2.length < 2 || col3.length < 3) return null;
   const count = countSanrentan(col1, col2, col3);
   return {
@@ -396,7 +396,7 @@ function sanrentanSniper(sh: ScoredHorse[]): FormationPattern | null {
 function sanrentanHoken(sh: ScoredHorse[]): FormationPattern | null {
   const col1 = getTopN(sh, 3);
   const col2 = getRankedUmabans(sh, 'A').slice(0, 6);
-  const col3 = getRankedUmabans(sh, 'C').slice(0, 9);
+  const col3 = getRankedUmabans(sh, 'C').slice(0, 12);
   if (col1.length < 2 || col2.length < 3 || col3.length < 3) return null;
   const count = countSanrentan(col1, col2, col3);
   return {
