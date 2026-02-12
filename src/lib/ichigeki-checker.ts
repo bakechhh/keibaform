@@ -21,6 +21,46 @@ export interface IchigekiEligibility {
   avgSanrentanSynOdds: number | null;
 }
 
+/**
+ * オッズ不要のクイックチェック（①④⑤⑥）
+ * 全レース一覧で候補表示するために使う
+ */
+export interface IchigekiQuickResult {
+  candidate: boolean;
+  favoriteOdds: number;
+  horseCount: number;
+  failReasons: string[];
+}
+
+export function quickCheckIchigeki(race: Race): IchigekiQuickResult {
+  const failReasons: string[] = [];
+
+  // ① 1番人気オッズ >= 3.0（Horse.tanshoOddsから取得）
+  const favorite = race.horses.reduce(
+    (min, h) => (h.tanshoOdds > 0 && h.tanshoOdds < min.tanshoOdds) ? h : min,
+    race.horses[0],
+  );
+  const favoriteOdds = favorite?.tanshoOdds ?? 0;
+  if (favoriteOdds < 3.0) failReasons.push(`1人気${favoriteOdds.toFixed(1)}倍`);
+
+  // ④ 新馬除外
+  if (race.condition.includes('新馬')) failReasons.push('新馬');
+
+  // ⑤ 12頭以上
+  const horseCount = race.horses.length;
+  if (horseCount < 12) failReasons.push(`${horseCount}頭`);
+
+  // ⑥ 堅実除外
+  if (race.evaluation.type === 'SOLID') failReasons.push('堅実');
+
+  return {
+    candidate: failReasons.length === 0,
+    favoriteOdds,
+    horseCount,
+    failReasons,
+  };
+}
+
 function isIchigekiPattern(p: FormationPattern): boolean {
   return p.name.includes('一撃');
 }
