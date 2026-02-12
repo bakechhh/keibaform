@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronUp, Copy, Calculator, X, Check } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, Calculator, X, Check, Zap, CheckCircle, XCircle } from 'lucide-react';
 import {
   Race,
   OddsDisplay,
@@ -17,6 +17,9 @@ import {
   BettingConfig,
 } from '../types';
 import { useBettingPreview } from '../hooks/useBettingPreview';
+import { calcFormationSyntheticOdds } from '../lib/synthetic-odds';
+import { IchigekiEligibility } from '../lib/ichigeki-checker';
+import { useIchigekiNotification } from '../hooks/useIchigekiNotification';
 
 interface BettingPreviewViewProps {
   race: Race;
@@ -38,72 +41,6 @@ function syntheticOddsFromArray(oddsArr: number[]): number | null {
   const sum = valid.reduce((acc, o) => acc + 1 / o, 0);
   if (sum === 0) return null;
   return 1 / sum;
-}
-
-// 三連複/三連単のオッズマップ構築
-function buildSanrenpukuOddsMap(odds: OddsDisplay | null): Map<string, number> {
-  const map = new Map<string, number>();
-  if (!odds) return map;
-  for (const entry of odds.sanrenpuku) {
-    const nums = entry.combination.split(/[-=]/).map(Number).sort((a, b) => a - b);
-    if (nums.length === 3) {
-      map.set(nums.join('-'), entry.odds);
-    }
-  }
-  return map;
-}
-
-function buildSanrentanOddsMap(odds: OddsDisplay | null): Map<string, number> {
-  const map = new Map<string, number>();
-  if (!odds) return map;
-  for (const entry of odds.sanrentan) {
-    map.set(entry.combination, entry.odds);
-  }
-  return map;
-}
-
-// フォーメーションの合成オッズ計算
-function calcFormationSyntheticOdds(
-  pattern: FormationPattern,
-  type: '三連複' | '三連単',
-  spOddsMap: Map<string, number>,
-  stOddsMap: Map<string, number>,
-): number | null {
-  if (type === '三連複') {
-    const combos = pattern.combos;
-    if (!combos || combos.length === 0) return null;
-    let sum = 0;
-    let found = 0;
-    for (const combo of combos) {
-      const key = [...combo].sort((a, b) => a - b).join('-');
-      const odds = spOddsMap.get(key);
-      if (odds && odds > 0) {
-        sum += 1 / odds;
-        found++;
-      }
-    }
-    if (found === 0) return null;
-    return 1 / sum;
-  } else {
-    let sum = 0;
-    let found = 0;
-    for (const a of pattern.col1) {
-      for (const b of pattern.col2) {
-        if (b === a) continue;
-        for (const c of pattern.col3) {
-          if (c === a || c === b) continue;
-          const key = `${a}-${b}-${c}`;
-          const odds = stOddsMap.get(key);
-          if (odds && odds > 0) {
-            sum += 1 / odds;
-            found++;
-          }
-        }
-      }
-    }
-    if (found === 0) return null;
-    return 1 / sum;
-  }
 }
 
 // 合成オッズバッジ
@@ -764,24 +701,180 @@ function ScoredHorsesRanking({ scoredHorses }: { scoredHorses: ScoredHorse[] }) 
   );
 }
 
+// ===== 一撃判定パネル =====
+function IchigekiEligibilityPanel({ eligibility }: { eligibility: IchigekiEligibility }) {
+  return (
+    <div
+      className="p-4 rounded-xl border space-y-3"
+      style={{ backgroundColor: 'var(--bg-card)', borderColor: eligibility.eligible ? 'rgb(234 179 8 / 0.4)' : 'var(--border)' }}
+    >
+      {/* 合格バナー */}
+      {eligibility.eligible && (
+        <motion.div
+          className="flex items-center gap-2 p-3 rounded-lg border"
+          style={{ backgroundColor: 'rgb(234 179 8 / 0.1)', borderColor: 'rgb(234 179 8 / 0.3)' }}
+          animate={{ scale: [1, 1.01, 1] }}
+          transition={{ repeat: Infinity, duration: 2 }}
+        >
+          <Zap className="w-5 h-5 text-yellow-400" />
+          <span className="text-sm font-bold text-yellow-400">一撃対象レース</span>
+        </motion.div>
+      )}
+
+      <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+        <Zap className="w-4 h-4 text-yellow-400" />
+        一撃購入条件チェック
+      </h3>
+
+      <div className="space-y-1.5">
+        {eligibility.conditions.map((cond, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg"
+            style={{ backgroundColor: 'var(--bg-secondary)' }}
+          >
+            {cond.passed ? (
+              <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            ) : (
+              <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-xs font-bold"
+                  style={{ color: cond.passed ? 'var(--text-primary)' : 'rgb(248 113 113)' }}
+                >
+                  {cond.label}
+                </span>
+                <span className="text-[10px] font-mono" style={{ color: 'var(--text-secondary)' }}>
+                  {cond.threshold}
+                </span>
+              </div>
+              <span
+                className="text-[10px]"
+                style={{ color: cond.passed ? 'rgb(52 211 153)' : 'rgb(248 113 113)' }}
+              >
+                {cond.value}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ===== 合成オッズサマリー =====
+function SyntheticOddsSummary({ eligibility }: { eligibility: IchigekiEligibility }) {
+  const spOdds = eligibility.avgSanrenpukuSynOdds;
+  const stOdds = eligibility.avgSanrentanSynOdds;
+
+  const spInRange = spOdds !== null && spOdds <= 5.0;
+  const stInRange = stOdds !== null && stOdds >= 10.0 && stOdds <= 25.0;
+
+  return (
+    <div
+      className="p-4 rounded-xl border space-y-3"
+      style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
+    >
+      <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+        合成オッズ分析（一撃以外の平均）
+      </h3>
+      <div className="grid grid-cols-2 gap-3">
+        <div
+          className="p-3 rounded-lg border"
+          style={{
+            backgroundColor: 'var(--bg-secondary)',
+            borderColor: spInRange ? 'rgb(52 211 153 / 0.3)' : 'rgb(248 113 113 / 0.3)',
+          }}
+        >
+          <div className="text-[10px] mb-1" style={{ color: 'var(--text-secondary)' }}>
+            三連複平均
+          </div>
+          <div className={`text-lg font-bold font-mono ${spInRange ? 'text-emerald-400' : 'text-red-400'}`}>
+            {spOdds !== null ? `${spOdds.toFixed(2)}倍` : '-'}
+          </div>
+          <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+            閾値: &lt;= 5.0
+          </div>
+        </div>
+        <div
+          className="p-3 rounded-lg border"
+          style={{
+            backgroundColor: 'var(--bg-secondary)',
+            borderColor: stInRange ? 'rgb(52 211 153 / 0.3)' : 'rgb(248 113 113 / 0.3)',
+          }}
+        >
+          <div className="text-[10px] mb-1" style={{ color: 'var(--text-secondary)' }}>
+            三連単平均
+          </div>
+          <div className={`text-lg font-bold font-mono ${stInRange ? 'text-emerald-400' : 'text-red-400'}`}>
+            {stOdds !== null ? `${stOdds.toFixed(2)}倍` : '-'}
+          </div>
+          <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+            閾値: 10.0 〜 25.0
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== 一撃トースト通知 =====
+function IchigekiToastBanner({
+  raceName,
+  onDismiss,
+}: {
+  raceName: string;
+  onDismiss: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border"
+      style={{
+        backgroundColor: 'rgb(234 179 8 / 0.15)',
+        borderColor: 'rgb(234 179 8 / 0.4)',
+        backdropFilter: 'blur(8px)',
+      }}
+    >
+      <Zap className="w-5 h-5 text-yellow-400" />
+      <span className="text-sm font-bold text-yellow-400">
+        {raceName} 一撃対象レース検出!
+      </span>
+      <button onClick={onDismiss} className="ml-2 p-1 rounded hover:bg-white/10">
+        <X className="w-3 h-3 text-yellow-400" />
+      </button>
+    </motion.div>
+  );
+}
+
 // ===== FormationCard =====
 function FormationCard({
-  pattern, type, spOddsMap, stOddsMap, onAllocate,
+  pattern, type, spOddsMap, stOddsMap, onAllocate, ichigekiEligible,
 }: {
   pattern: FormationPattern;
   type: '三連複' | '三連単';
   spOddsMap: Map<string, number>;
   stOddsMap: Map<string, number>;
   onAllocate: (title: string, items: { label: string; odds: number }[]) => void;
+  ichigekiEligible?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const synOdds = calcFormationSyntheticOdds(pattern, type, spOddsMap, stOddsMap);
   const formItems = getFormationItems(pattern, type, spOddsMap, stOddsMap);
 
+  const isIchigeki = pattern.name.includes('一撃');
+  const ichigekiBorderColor = isIchigeki
+    ? ichigekiEligible ? 'rgb(234 179 8 / 0.5)' : 'rgb(107 114 128 / 0.4)'
+    : 'var(--border)';
+
   return (
     <div
-      className="p-3 rounded-xl border"
-      style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
+      className={`p-3 rounded-xl border${isIchigeki ? ' border-2' : ''}`}
+      style={{ backgroundColor: 'var(--bg-card)', borderColor: ichigekiBorderColor }}
     >
       <div
         onClick={() => setIsOpen(!isOpen)}
@@ -795,6 +888,17 @@ function FormationCard({
                 {pattern.name}
               </span>
               <SyntheticOddsBadge odds={synOdds} />
+              {isIchigeki && (
+                ichigekiEligible ? (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
+                    対象
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-500/20 text-gray-400">
+                    条件未達
+                  </span>
+                )
+              )}
             </div>
             <span className="text-[10px] block truncate" style={{ color: 'var(--text-secondary)' }}>
               {pattern.description}
@@ -900,12 +1004,13 @@ function FormationCard({
 
 // ===== FormationSection =====
 function FormationSection({
-  formations, spOddsMap, stOddsMap, onAllocate,
+  formations, spOddsMap, stOddsMap, onAllocate, ichigekiEligible,
 }: {
   formations: FormationResult;
   spOddsMap: Map<string, number>;
   stOddsMap: Map<string, number>;
   onAllocate: (title: string, items: { label: string; odds: number }[]) => void;
+  ichigekiEligible?: boolean;
 }) {
   const [showSanrenpuku, setShowSanrenpuku] = useState(true);
 
@@ -947,7 +1052,7 @@ function FormationSection({
           >
             {formations.sanrenpuku.length > 0 ? (
               formations.sanrenpuku.map((p, i) => (
-                <FormationCard key={i} pattern={p} type="三連複" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} />
+                <FormationCard key={i} pattern={p} type="三連複" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} ichigekiEligible={ichigekiEligible} />
               ))
             ) : (
               <p className="text-xs p-3" style={{ color: 'var(--text-secondary)' }}>
@@ -965,7 +1070,7 @@ function FormationSection({
           >
             {formations.sanrentan.length > 0 ? (
               formations.sanrentan.map((p, i) => (
-                <FormationCard key={i} pattern={p} type="三連単" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} />
+                <FormationCard key={i} pattern={p} type="三連単" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} ichigekiEligible={ichigekiEligible} />
               ))
             ) : (
               <p className="text-xs p-3" style={{ color: 'var(--text-secondary)' }}>
@@ -981,11 +1086,13 @@ function FormationSection({
 
 // ===== メインコンポーネント =====
 export default function BettingPreviewView({ race, odds }: BettingPreviewViewProps) {
-  const { config, setConfig, compareResult, formationResult } = useBettingPreview(race, odds);
+  const {
+    config, setConfig, compareResult, formationResult,
+    ichigekiEligibility, spOddsMap, stOddsMap,
+  } = useBettingPreview(race, odds);
 
-  // 三連系オッズマップ
-  const spOddsMap = buildSanrenpukuOddsMap(odds);
-  const stOddsMap = buildSanrentanOddsMap(odds);
+  // 一撃通知
+  const { toast, dismissToast } = useIchigekiNotification(ichigekiEligibility, race);
 
   // 資金配分モーダル
   const [allocationTarget, setAllocationTarget] = useState<{
@@ -995,6 +1102,13 @@ export default function BettingPreviewView({ race, odds }: BettingPreviewViewPro
 
   return (
     <div className="space-y-4">
+      {/* 一撃トースト通知 */}
+      <AnimatePresence>
+        {toast.show && (
+          <IchigekiToastBanner raceName={toast.raceName} onDismiss={dismissToast} />
+        )}
+      </AnimatePresence>
+
       {/* Config Panel */}
       <BettingConfigPanel config={config} onChange={setConfig} />
 
@@ -1033,6 +1147,14 @@ export default function BettingPreviewView({ race, odds }: BettingPreviewViewPro
         <ScoredHorsesRanking scoredHorses={formationResult.scoredHorses} />
       )}
 
+      {/* 一撃判定パネル + 合成オッズ分析 */}
+      {ichigekiEligibility && (
+        <>
+          <IchigekiEligibilityPanel eligibility={ichigekiEligibility} />
+          <SyntheticOddsSummary eligibility={ichigekiEligibility} />
+        </>
+      )}
+
       {/* Formation Section */}
       {formationResult && (formationResult.sanrenpuku.length > 0 || formationResult.sanrentan.length > 0) && (
         <FormationSection
@@ -1040,6 +1162,7 @@ export default function BettingPreviewView({ race, odds }: BettingPreviewViewPro
           spOddsMap={spOddsMap}
           stOddsMap={stOddsMap}
           onAllocate={(title, items) => setAllocationTarget({ title, items })}
+          ichigekiEligible={ichigekiEligibility?.eligible}
         />
       )}
 

@@ -15,6 +15,8 @@ import {
   DEFAULT_UMAREN_AMOUNT,
 } from '../lib/bet-generator';
 import { generateFormations } from '../lib/formation-generator';
+import { checkIchigekiEligibility, IchigekiEligibility } from '../lib/ichigeki-checker';
+import { buildSanrenpukuOddsMap, buildSanrentanOddsMap } from '../lib/synthetic-odds';
 
 export function useBettingPreview(race: Race | null, odds: OddsDisplay | null) {
   const [config, setConfig] = useState<BettingConfig>({
@@ -26,6 +28,8 @@ export function useBettingPreview(race: Race | null, odds: OddsDisplay | null) {
 
   const wideOddsMap = useMemo(() => buildWideOddsMap(odds), [odds]);
   const umarenOddsMap = useMemo(() => buildUmarenOddsMap(odds), [odds]);
+  const spOddsMap = useMemo(() => buildSanrenpukuOddsMap(odds), [odds]);
+  const stOddsMap = useMemo(() => buildSanrentanOddsMap(odds), [odds]);
 
   const compareResult = useMemo<CompareResult | null>(() => {
     if (!race || race.horses.length === 0) return null;
@@ -59,10 +63,18 @@ export function useBettingPreview(race: Race | null, odds: OddsDisplay | null) {
     return generateFormations(race.horses, modeBets);
   }, [race, compareResult]);
 
+  const ichigekiEligibility = useMemo<IchigekiEligibility | null>(() => {
+    if (!race || !formationResult) return null;
+    return checkIchigekiEligibility(race, odds, formationResult);
+  }, [race, odds, formationResult]);
+
   return {
     config,
     setConfig,
     compareResult,
     formationResult,
+    ichigekiEligibility,
+    spOddsMap,
+    stOddsMap,
   };
 }

@@ -1,0 +1,120 @@
+/**
+ * 一撃購入条件チェッカー
+ * 5つのAND条件をすべて判定し、一撃対象レースかを判定する
+ */
+
+import { Race, OddsDisplay, FormationResult, FormationPattern } from '../types';
+import { calcFormationSyntheticOdds, buildSanrenpukuOddsMap, buildSanrentanOddsMap } from './synthetic-odds';
+
+export interface IchigekiCondition {
+  label: string;
+  description: string;
+  passed: boolean;
+  value: string;
+  threshold: string;
+}
+
+export interface IchigekiEligibility {
+  eligible: boolean;
+  conditions: IchigekiCondition[];
+  avgSanrenpukuSynOdds: number | null;
+  avgSanrentanSynOdds: number | null;
+}
+
+function isIchigekiPattern(p: FormationPattern): boolean {
+  return p.name.includes('一撃');
+}
+
+export function checkIchigekiEligibility(
+  race: Race,
+  odds: OddsDisplay | null,
+  formationResult: FormationResult,
+): IchigekiEligibility {
+  const spOddsMap = buildSanrenpukuOddsMap(odds);
+  const stOddsMap = buildSanrentanOddsMap(odds);
+
+  // ① 1番人気の単勝オッズ >= 3.0
+  const tanshoSorted = odds?.tansho
+    ? [...odds.tansho].sort((a, b) => a.odds - b.odds)
+    : [];
+  const favoriteOdds = tanshoSorted.length > 0 ? tanshoSorted[0].odds : 0;
+  const cond1: IchigekiCondition = {
+    label: '1番人気オッズ',
+    description: '1番人気の単勝オッズが3.0倍以上',
+    passed: favoriteOdds >= 3.0,
+    value: favoriteOdds > 0 ? `${favoriteOdds.toFixed(1)}倍` : '不明',
+    threshold: '>= 3.0倍',
+  };
+
+  // ② 三連複の合成オッズ平均 <= 5.0（一撃以外のパターン）
+  const nonIchigekiSp = formationResult.sanrenpuku.filter(p => !isIchigekiPattern(p));
+  const spSynOddsArr = nonIchigekiSp
+    .map(p => calcFormationSyntheticOdds(p, '三連複', spOddsMap, stOddsMap))
+    .filter((v): v is number => v !== null);
+  const avgSpSyn = spSynOddsArr.length > 0
+    ? spSynOddsArr.reduce((a, b) => a + b, 0) / spSynOddsArr.length
+    : null;
+  const cond2: IchigekiCondition = {
+    label: '三連複合成オッズ平均',
+    description: '一撃以外の三連複パターンの合成オッズ平均が5.0以下',
+    passed: avgSpSyn !== null && avgSpSyn <= 5.0,
+    value: avgSpSyn !== null ? `${avgSpSyn.toFixed(2)}倍` : '算出不可',
+    threshold: '<= 5.0',
+  };
+
+  // ③ 三連単の合成オッズ平均 >= 10.0 かつ <= 25.0（一撃以外のパターン）
+  const nonIchigekiSt = formationResult.sanrentan.filter(p => !isIchigekiPattern(p));
+  const stSynOddsArr = nonIchigekiSt
+    .map(p => calcFormationSyntheticOdds(p, '三連単', spOddsMap, stOddsMap))
+    .filter((v): v is number => v !== null);
+  const avgStSyn = stSynOddsArr.length > 0
+    ? stSynOddsArr.reduce((a, b) => a + b, 0) / stSynOddsArr.length
+    : null;
+  const cond3: IchigekiCondition = {
+    label: '三連単合成オッズ平均',
+    description: '一撃以外の三連単パターンの合成オッズ平均が10.0〜25.0',
+    passed: avgStSyn !== null && avgStSyn >= 10.0 && avgStSyn <= 25.0,
+    value: avgStSyn !== null ? `${avgStSyn.toFixed(2)}倍` : '算出不可',
+    threshold: '10.0 〜 25.0',
+  };
+
+  // ④ 新馬レース除外
+  const isNewbie = race.condition.includes('新馬');
+  const cond4: IchigekiCondition = {
+    label: '新馬レース除外',
+    description: '新馬レースではないこと',
+    passed: !isNewbie,
+    value: isNewbie ? '新馬' : '対象外',
+    threshold: '新馬以外',
+  };
+
+  // ⑤ 出走頭数 >= 12
+  const horseCount = race.horses.length;
+  const cond5: IchigekiCondition = {
+    label: '出走頭数',
+    description: '12頭以上の出走があること',
+    passed: horseCount >= 12,
+    value: `${horseCount}頭`,
+    threshold: '>= 12頭',
+  };
+
+  // ⑥ 堅実レース除外
+  const isSolid = race.evaluation.type === 'SOLID';
+  const cond6: IchigekiCondition = {
+    label: '堅実レース除外',
+    description: '堅実レースではないこと',
+    passed: !isSolid,
+    value: isSolid ? '堅実' : race.evaluation.label,
+    threshold: '堅実以外',
+  };
+
+  const conditions = [cond1, cond2, cond3, cond4, cond5, cond6];
+  const eligible = conditions.every(c => c.passed);
+
+  return {
+    eligible,
+    conditions,
+    avgSanrenpukuSynOdds: avgSpSyn,
+    avgSanrentanSynOdds: avgStSyn,
+  };
+}

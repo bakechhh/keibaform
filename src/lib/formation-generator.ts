@@ -407,6 +407,132 @@ function sanrentanHoken(sh: ScoredHorse[]): FormationPattern | null {
   };
 }
 
+// ===== 一撃パターン =====
+
+/**
+ * 一撃用: AI単勝/連対1-2位の馬番取得
+ */
+function getAiTop(horses: Horse[]): number[] {
+  const result = new Set<number>();
+  for (const h of horses) {
+    const wr = h.predictions?.win_rate_rank ?? 99;
+    const pr = h.predictions?.place_rate_rank ?? 99;
+    if (wr <= 2 || pr <= 2) {
+      result.add(h.number);
+    }
+  }
+  return Array.from(result).sort((a, b) => a - b);
+}
+
+/**
+ * 一撃用: 2着昇格判定
+ * 既存逆転の3着候補から以下のOR条件で2着に昇格:
+ *   ① 効率S以上(7倍↑) & (AI予測5位以内 or FS48以上)
+ *   ② score_rankingにいる(modesCount>=2 & score>=4)
+ *   ③ 紐以上(status≠delete) & オッズ15倍以上
+ */
+function getIchigekiPromoted(
+  col3Umabans: number[],
+  horses: Horse[],
+  sh: ScoredHorse[],
+): number[] {
+  const promoted = new Set<number>();
+  const horseMap: Record<number, Horse> = {};
+  for (const h of horses) horseMap[h.number] = h;
+
+  for (const uma of col3Umabans) {
+    const h = horseMap[uma];
+    const s = sh.find(x => x.umaban === uma);
+    if (!h || !s) continue;
+
+    const odds = h.tanshoOdds ?? 0;
+    const fs = h.indices?.final_score ?? 0;
+    const aiWinRank = h.predictions?.win_rate_rank ?? 99;
+    const aiPlaceRank = h.predictions?.place_rate_rank ?? 99;
+    const aiShowRank = h.predictions?.show_rate_rank ?? 99;
+    const ai5 = aiWinRank <= 5 || aiPlaceRank <= 5 || aiShowRank <= 5;
+
+    // ① 効率S以上 & (AI5位以内 or FS48以上)
+    if (odds >= 7.0 && (ai5 || fs >= 48)) {
+      promoted.add(uma);
+    }
+    // ② score_ranking相当(3モードで複数回評価)
+    if (s.modesCount >= 2 && s.score >= 4) {
+      promoted.add(uma);
+    }
+    // ③ 紐以上(status≠delete) かつ オッズ15倍以上
+    if (odds >= 15.0 && s.rank !== '-') {
+      promoted.add(uma);
+    }
+  }
+
+  return Array.from(promoted).sort((a, b) => a - b);
+}
+
+/**
+ * 一撃（三連単）
+ * 1着: 既存逆転1着 + AI単勝/連対1-2位
+ * 2着: 既存逆転2着 + AI単勝/連対1-2位 + 昇格組
+ * 3着: 総流し
+ */
+function sanrentanIchigeki(
+  sh: ScoredHorse[],
+  horses: Horse[],
+  gyakutenPattern: FormationPattern | null,
+): FormationPattern | null {
+  if (!gyakutenPattern) return null;
+
+  const aiTop = getAiTop(horses);
+  const allUma = horses.map(h => h.number).sort((a, b) => a - b);
+
+  const col1 = Array.from(new Set([...gyakutenPattern.col1, ...aiTop])).sort((a, b) => a - b);
+  const promoted = getIchigekiPromoted(gyakutenPattern.col3, horses, sh);
+  const col2 = Array.from(new Set([...gyakutenPattern.col2, ...aiTop, ...promoted])).sort((a, b) => a - b);
+  const col3 = allUma;
+
+  if (col1.length === 0 || col2.length < 2) return null;
+
+  const count = countSanrentan(col1, col2, col3);
+  return {
+    name: '一撃（三連単）', emoji: '⚡',
+    description: '逆転強化+3着総流し。推奨: 5条件フィルター該当レース',
+    col1, col2, col3,
+    count, amount: 0,
+  };
+}
+
+/**
+ * 一撃（三連複）
+ * 1列目: 既存逆転1着 + AI単勝/連対1-2位
+ * 2列目: 既存逆転2着 + AI単勝/連対1-2位 + 昇格組
+ * 3列目: 総流し
+ */
+function sanrenpukuIchigeki(
+  sh: ScoredHorse[],
+  horses: Horse[],
+  gyakutenPattern: FormationPattern | null,
+): FormationPattern | null {
+  if (!gyakutenPattern) return null;
+
+  const aiTop = getAiTop(horses);
+  const allUma = horses.map(h => h.number).sort((a, b) => a - b);
+
+  const col1 = Array.from(new Set([...gyakutenPattern.col1, ...aiTop])).sort((a, b) => a - b);
+  const promoted = getIchigekiPromoted(gyakutenPattern.col3, horses, sh);
+  const col2 = Array.from(new Set([...gyakutenPattern.col2, ...aiTop, ...promoted])).sort((a, b) => a - b);
+  const col3 = allUma;
+
+  if (col1.length === 0 || col2.length < 2) return null;
+
+  const count = countSanrenpuku(col1, col2, col3);
+  return {
+    name: '一撃（三連複）', emoji: '⚡',
+    description: '逆転強化+3列目総流し。推奨: 5条件フィルター該当レース',
+    col1, col2, col3,
+    count, amount: 0,
+  };
+}
+
 // ===== メイン =====
 
 export function generateFormations(
@@ -470,6 +596,20 @@ export function generateFormations(
       r.amount = r.count * unitAmount;
       sanrentan.push(r);
     }
+  }
+
+  // 一撃パターン（逆転ベースの強化版）
+  const gyakutenPattern = sanrentanGyakuten(sh);
+  const ichigekiSt = sanrentanIchigeki(sh, horses, gyakutenPattern);
+  if (ichigekiSt) {
+    ichigekiSt.amount = ichigekiSt.count * unitAmount;
+    sanrentan.push(ichigekiSt);
+  }
+  const ichigekiSp = sanrenpukuIchigeki(sh, horses, gyakutenPattern);
+  if (ichigekiSp) {
+    ichigekiSp.amount = ichigekiSp.count * unitAmount;
+    ichigekiSp.combos = listSanrenpukuCombos(ichigekiSp.col1, ichigekiSp.col2, ichigekiSp.col3);
+    sanrenpuku.push(ichigekiSp);
   }
 
   const scoredHorses = sh.filter(h => h.score > 0);
