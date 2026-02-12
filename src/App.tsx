@@ -22,7 +22,7 @@ import BettingPreviewView from './components/BettingPreviewView';
 import ExportPanel from './components/ExportPanel';
 import FilterTemplateSelector from './components/FilterTemplateSelector';
 import { FilterCondition, applyFilterConditions } from './hooks/useFilterTemplates';
-import { quickCheckIchigeki, IchigekiQuickResult } from './lib/ichigeki-checker';
+import { useIchigekiScan } from './hooks/useIchigekiScan';
 import AdvancedFilters, {
   defaultHorseFilters,
   defaultRaceFilters,
@@ -69,7 +69,7 @@ export default function App() {
   const [horseFilters, setHorseFilters] = useState<HorseFilters>(defaultHorseFilters);
   const [raceFilters, setRaceFilters] = useState<RaceFilters>(defaultRaceFilters);
 
-  const { races, loading, error, refreshData, lastUpdated, cacheRemaining } = useRaceData();
+  const { races, allOddsMap, loading, error, refreshData, lastUpdated, cacheRemaining } = useRaceData();
   const { odds: oddsData, loading: oddsLoading } = useOddsData(selectedRace?.originalRaceId || null);
 
   // レース結果データ
@@ -125,17 +125,8 @@ export default function App() {
     });
   }, [venueFilteredRaces, raceFilters]);
 
-  // 一撃候補レース（オッズ不要の4条件クイックチェック）
-  const ichigekiCandidates = useMemo(() => {
-    const results: Array<{ race: Race; result: IchigekiQuickResult }> = [];
-    for (const race of races) {
-      const result = quickCheckIchigeki(race);
-      if (result.candidate) {
-        results.push({ race, result });
-      }
-    }
-    return results;
-  }, [races]);
+  // 一撃スキャン（全条件+合成オッズ上限で判定）
+  const ichigekiScanResults = useIchigekiScan(races, allOddsMap);
 
   // フィルター適用時・初回ロード時にレースを選択
   useEffect(() => {
@@ -456,8 +447,8 @@ export default function App() {
           </section>
         )}
 
-        {/* 一撃候補レースパネル */}
-        {ichigekiCandidates.length > 0 && (
+        {/* 一撃対象レースパネル */}
+        {ichigekiScanResults.length > 0 && (
           <motion.section
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -472,49 +463,74 @@ export default function App() {
               <div className="flex items-center gap-2 mb-2">
                 <Zap className="w-4 h-4 text-yellow-400" />
                 <span className="text-sm font-bold text-yellow-400">
-                  一撃候補レース
+                  一撃対象レース
                 </span>
                 <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
-                  ({ichigekiCandidates.length}レース / 条件②③は馬券タブで確認)
+                  ({ichigekiScanResults.filter(r => r.level === 'eligible').length}件
+                  {ichigekiScanResults.some(r => r.level === 'semi') &&
+                    ` + 準${ichigekiScanResults.filter(r => r.level === 'semi').length}件`
+                  })
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {ichigekiCandidates.map(({ race: r, result }) => (
-                  <motion.button
-                    key={r.id}
-                    onClick={() => {
-                      setSelectedRace(r);
-                      setSelectedVenue(r.location);
-                      setViewMode('betting');
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                      selectedRace?.id === r.id
-                        ? 'border-yellow-400/60 bg-yellow-500/15'
-                        : 'border-yellow-400/20 hover:bg-yellow-500/10'
-                    }`}
-                    style={{ color: 'var(--text-primary)' }}
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
-                  >
-                    <Zap className="w-3 h-3 text-yellow-400" />
-                    <span className="font-bold">{r.location}{r.round}R</span>
-                    <span style={{ color: 'var(--text-secondary)' }}>
-                      {r.horses.length}頭
-                    </span>
-                    <span className="text-[10px] font-mono" style={{ color: 'var(--text-secondary)' }}>
-                      1人気{result.favoriteOdds.toFixed(1)}倍
-                    </span>
-                    <span
-                      className="px-1 py-0.5 rounded text-[10px] font-bold"
-                      style={{
-                        backgroundColor: `${r.evaluation.bg}`,
-                        color: `${r.evaluation.color}`,
+                {ichigekiScanResults.map(({ race: r, level, eligibility }) => {
+                  const isSemi = level === 'semi';
+                  const favOdds = r.horses.reduce(
+                    (min, h) => (h.tanshoOdds > 0 && h.tanshoOdds < min) ? h.tanshoOdds : min,
+                    Infinity,
+                  );
+                  return (
+                    <motion.button
+                      key={r.id}
+                      onClick={() => {
+                        setSelectedRace(r);
+                        setSelectedVenue(r.location);
+                        setViewMode('betting');
                       }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                        selectedRace?.id === r.id
+                          ? isSemi ? 'border-blue-400/60 bg-blue-500/15' : 'border-yellow-400/60 bg-yellow-500/15'
+                          : isSemi ? 'border-blue-400/20 hover:bg-blue-500/10' : 'border-yellow-400/20 hover:bg-yellow-500/10'
+                      }`}
+                      style={{ color: 'var(--text-primary)' }}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
                     >
-                      {r.evaluation.label}
-                    </span>
-                  </motion.button>
-                ))}
+                      <Zap className={`w-3 h-3 ${isSemi ? 'text-blue-400' : 'text-yellow-400'}`} />
+                      <span className="font-bold">{r.location}{r.round}R</span>
+                      {isSemi && (
+                        <span className="px-1 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400">
+                          準
+                        </span>
+                      )}
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {r.horses.length}頭
+                      </span>
+                      <span className="text-[10px] font-mono" style={{ color: 'var(--text-secondary)' }}>
+                        1人気{favOdds === Infinity ? '-' : favOdds.toFixed(1)}倍
+                      </span>
+                      {eligibility.ichigekiSpSynOdds !== null && (
+                        <span className="text-[10px] font-mono" style={{ color: 'var(--text-secondary)' }}>
+                          複{eligibility.ichigekiSpSynOdds.toFixed(1)}
+                        </span>
+                      )}
+                      {eligibility.ichigekiStSynOdds !== null && (
+                        <span className="text-[10px] font-mono" style={{ color: 'var(--text-secondary)' }}>
+                          単{eligibility.ichigekiStSynOdds.toFixed(1)}
+                        </span>
+                      )}
+                      <span
+                        className="px-1 py-0.5 rounded text-[10px] font-bold"
+                        style={{
+                          backgroundColor: `${r.evaluation.bg}`,
+                          color: `${r.evaluation.color}`,
+                        }}
+                      >
+                        {r.evaluation.label}
+                      </span>
+                    </motion.button>
+                  );
+                })}
               </div>
             </div>
           </motion.section>

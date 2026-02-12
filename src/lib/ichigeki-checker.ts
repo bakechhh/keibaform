@@ -1,6 +1,6 @@
 /**
  * 一撃購入条件チェッカー
- * 5つのAND条件をすべて判定し、一撃対象レースかを判定する
+ * 6つのAND条件 + 一撃パターン合成オッズ上限で判定
  */
 
 import { Race, OddsDisplay, FormationResult, FormationPattern } from '../types';
@@ -14,11 +14,22 @@ export interface IchigekiCondition {
   threshold: string;
 }
 
+// 一撃パターン合成オッズ上限
+const ICHIGEKI_SP_MAX = 8.0;   // 三連複: これ以上は対象外
+const ICHIGEKI_ST_MAX = 40.0;  // 三連単: これ以上は対象外
+const ICHIGEKI_SP_SEMI = 6.5;  // 三連複: 準勝負の上限
+const ICHIGEKI_ST_SEMI = 30.0; // 三連単: 準勝負の上限
+
+export type IchigekiLevel = 'eligible' | 'semi' | 'ineligible';
+
 export interface IchigekiEligibility {
   eligible: boolean;
+  level: IchigekiLevel;
   conditions: IchigekiCondition[];
   avgSanrenpukuSynOdds: number | null;
   avgSanrentanSynOdds: number | null;
+  ichigekiSpSynOdds: number | null;
+  ichigekiStSynOdds: number | null;
 }
 
 /**
@@ -148,13 +159,58 @@ export function checkIchigekiEligibility(
     threshold: '堅実以外',
   };
 
-  const conditions = [cond1, cond2, cond3, cond4, cond5, cond6];
-  const eligible = conditions.every(c => c.passed);
+  // 一撃パターン自体の合成オッズ
+  const ichigekiSpPattern = formationResult.sanrenpuku.find(p => isIchigekiPattern(p));
+  const ichigekiStPattern = formationResult.sanrentan.find(p => isIchigekiPattern(p));
+  const ichigekiSpSynOdds = ichigekiSpPattern
+    ? calcFormationSyntheticOdds(ichigekiSpPattern, '三連複', spOddsMap, stOddsMap)
+    : null;
+  const ichigekiStSynOdds = ichigekiStPattern
+    ? calcFormationSyntheticOdds(ichigekiStPattern, '三連単', spOddsMap, stOddsMap)
+    : null;
+
+  // ⑦ 一撃パターン合成オッズ上限チェック
+  const spOver = ichigekiSpSynOdds !== null && ichigekiSpSynOdds >= ICHIGEKI_SP_MAX;
+  const stOver = ichigekiStSynOdds !== null && ichigekiStSynOdds >= ICHIGEKI_ST_MAX;
+  const oddsOverAny = spOver || stOver;
+  const cond7: IchigekiCondition = {
+    label: '一撃合成オッズ上限',
+    description: `一撃パターン: 三連複<${ICHIGEKI_SP_MAX}倍 かつ 三連単<${ICHIGEKI_ST_MAX}倍`,
+    passed: !oddsOverAny,
+    value: [
+      ichigekiSpSynOdds !== null ? `複${ichigekiSpSynOdds.toFixed(2)}` : '複-',
+      ichigekiStSynOdds !== null ? `単${ichigekiStSynOdds.toFixed(2)}` : '単-',
+    ].join(' / '),
+    threshold: `複<${ICHIGEKI_SP_MAX} 単<${ICHIGEKI_ST_MAX}`,
+  };
+
+  const conditions = [cond1, cond2, cond3, cond4, cond5, cond6, cond7];
+  const baseEligible = conditions.every(c => c.passed);
+
+  // レベル判定
+  let level: IchigekiLevel = 'ineligible';
+  if (baseEligible) {
+    level = 'eligible';
+  } else if (
+    // 条件①〜⑥は全て合格だが⑦だけ不合格 → 準勝負の可能性
+    [cond1, cond2, cond3, cond4, cond5, cond6].every(c => c.passed)
+    && oddsOverAny
+  ) {
+    // 準勝負: 緩和閾値内なら準勝負レース
+    const spOk = ichigekiSpSynOdds === null || ichigekiSpSynOdds < ICHIGEKI_SP_SEMI;
+    const stOk = ichigekiStSynOdds === null || ichigekiStSynOdds < ICHIGEKI_ST_SEMI;
+    if (spOk && stOk) {
+      level = 'semi';
+    }
+  }
 
   return {
-    eligible,
+    eligible: level === 'eligible',
+    level,
     conditions,
     avgSanrenpukuSynOdds: avgSpSyn,
     avgSanrentanSynOdds: avgStSyn,
+    ichigekiSpSynOdds,
+    ichigekiStSynOdds,
   };
 }

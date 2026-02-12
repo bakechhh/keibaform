@@ -425,6 +425,48 @@ function getAiTop(horses: Horse[]): number[] {
 }
 
 /**
+ * 一撃用: 各指標1位の馬番取得
+ * AI単勝/AI連対/AI複勝/最終Sc/Mining/R評価/前走ZI/総合力 のいずれかで1位
+ */
+function getIndexTop1(horses: Horse[]): number[] {
+  const result = new Set<number>();
+  for (const h of horses) {
+    // DEBUG: 各馬のランク1チェック
+    const checks = {
+      num: h.number,
+      winRank: h.predictions.win_rate_rank,
+      placeRank: h.predictions.place_rate_rank,
+      showRank: h.predictions.show_rate_rank,
+      finalRank: h.finalRank,
+      miningRank: h.miningRank,
+      raceEvalRank: h.raceEvalRank,
+      ziRank: h.ziRank,
+      powerRank: h.powerRank,
+    };
+    const hasRank1 = Object.entries(checks).some(([k, v]) => k !== 'num' && v === 1);
+    if (hasRank1) {
+      console.log('[getIndexTop1] rank1 found:', checks);
+    }
+    if (h.predictions.win_rate_rank === 1) result.add(h.number);
+    if (h.predictions.place_rate_rank === 1) result.add(h.number);
+    if (h.predictions.show_rate_rank === 1) result.add(h.number);
+    if (h.finalRank === 1) result.add(h.number);
+    if (h.miningRank === 1) result.add(h.number);
+    if (h.raceEvalRank === 1) result.add(h.number);
+    if (h.ziRank === 1) result.add(h.number);
+    if (h.powerRank === 1) result.add(h.number);
+  }
+  console.log('[getIndexTop1] result:', Array.from(result));
+  // 型チェック: ziRankが文字列になってないか確認
+  for (const h of horses) {
+    if (h.ziRank == 1) {  // == で緩い比較
+      console.log(`[getIndexTop1] horse ${h.number} ziRank:`, h.ziRank, typeof h.ziRank, 'strict===1:', h.ziRank === 1);
+    }
+  }
+  return Array.from(result).sort((a, b) => a - b);
+}
+
+/**
  * 一撃用: 2着昇格判定
  * 既存逆転の3着候補から以下のOR条件で2着に昇格:
  *   ① 効率S以上(7倍↑) & (AI予測5位以内 or FS48以上)
@@ -471,7 +513,7 @@ function getIchigekiPromoted(
 
 /**
  * 一撃（三連単）
- * 1着: 既存逆転1着 + AI単勝/連対1-2位
+ * 1着: 既存逆転1着 + AI単勝/連対1-2位 + 各指標1位
  * 2着: 既存逆転2着 + AI単勝/連対1-2位 + 昇格組
  * 3着: 総流し
  */
@@ -483,9 +525,10 @@ function sanrentanIchigeki(
   if (!gyakutenPattern) return null;
 
   const aiTop = getAiTop(horses);
+  const indexTop1 = getIndexTop1(horses);
   const allUma = horses.map(h => h.number).sort((a, b) => a - b);
 
-  const col1 = Array.from(new Set([...gyakutenPattern.col1, ...aiTop])).sort((a, b) => a - b);
+  const col1 = Array.from(new Set([...gyakutenPattern.col1, ...aiTop, ...indexTop1])).sort((a, b) => a - b);
   const promoted = getIchigekiPromoted(gyakutenPattern.col3, horses, sh);
   const col2 = Array.from(new Set([...gyakutenPattern.col2, ...aiTop, ...promoted])).sort((a, b) => a - b);
   const col3 = allUma;
@@ -495,7 +538,7 @@ function sanrentanIchigeki(
   const count = countSanrentan(col1, col2, col3);
   return {
     name: '一撃（三連単）', emoji: '⚡',
-    description: '逆転強化+3着総流し。推奨: 5条件フィルター該当レース',
+    description: '逆転強化+各指標1位+3着総流し',
     col1, col2, col3,
     count, amount: 0,
   };
@@ -503,7 +546,7 @@ function sanrentanIchigeki(
 
 /**
  * 一撃（三連複）
- * 1列目: 既存逆転1着 + AI単勝/連対1-2位
+ * 1列目: 既存逆転1着 + AI単勝/連対1-2位 + 各指標1位
  * 2列目: 既存逆転2着 + AI単勝/連対1-2位 + 昇格組
  * 3列目: 総流し
  */
@@ -515,9 +558,10 @@ function sanrenpukuIchigeki(
   if (!gyakutenPattern) return null;
 
   const aiTop = getAiTop(horses);
+  const indexTop1 = getIndexTop1(horses);
   const allUma = horses.map(h => h.number).sort((a, b) => a - b);
 
-  const col1 = Array.from(new Set([...gyakutenPattern.col1, ...aiTop])).sort((a, b) => a - b);
+  const col1 = Array.from(new Set([...gyakutenPattern.col1, ...aiTop, ...indexTop1])).sort((a, b) => a - b);
   const promoted = getIchigekiPromoted(gyakutenPattern.col3, horses, sh);
   const col2 = Array.from(new Set([...gyakutenPattern.col2, ...aiTop, ...promoted])).sort((a, b) => a - b);
   const col3 = allUma;
@@ -527,7 +571,7 @@ function sanrenpukuIchigeki(
   const count = countSanrenpuku(col1, col2, col3);
   return {
     name: '一撃（三連複）', emoji: '⚡',
-    description: '逆転強化+3列目総流し。推奨: 5条件フィルター該当レース',
+    description: '逆転強化+各指標1位+3列目総流し',
     col1, col2, col3,
     count, amount: 0,
   };

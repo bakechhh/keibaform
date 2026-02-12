@@ -225,7 +225,7 @@ function transformRaceData(
 }
 
 // オッズデータを表示用に変換
-function transformOddsData(oddsData: RawOddsEntry[]): OddsDisplay {
+export function transformOddsData(oddsData: RawOddsEntry[]): OddsDisplay {
   const result: OddsDisplay = {
     tansho: [],
     fukusho: [],
@@ -383,6 +383,7 @@ function transformRaceResultData(rawResult: RawRaceResult): RaceResultDisplay {
 
 export function useRaceData() {
   const [races, setRaces] = useState<Race[]>([]);
+  const [allOddsMap, setAllOddsMap] = useState<Map<string, OddsDisplay>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -456,8 +457,11 @@ export function useRaceData() {
 
       // オッズをマップに変換
       const oddsMap = new Map<string, RawOddsEntry[]>();
+      const oddsDisplayMap = new Map<string, OddsDisplay>();
       for (const row of oddsResult.data || []) {
-        oddsMap.set(row.race_id, row.data as RawOddsEntry[]);
+        const rawEntries = row.data as RawOddsEntry[];
+        oddsMap.set(row.race_id, rawEntries);
+        oddsDisplayMap.set(row.race_id, transformOddsData(rawEntries));
       }
 
       // 馬場状態をマップに変換
@@ -525,6 +529,7 @@ export function useRaceData() {
       saveCacheToStorage(newCache);
 
       setRaces(transformedRaces);
+      setAllOddsMap(oddsDisplayMap);
       setLastUpdated(new Date(now));
     } catch (err) {
       console.error('Failed to load race data:', err);
@@ -546,7 +551,7 @@ export function useRaceData() {
     loadRaces();
   }, [loadRaces]);
 
-  return { races, loading, error, refreshData, lastUpdated, cacheRemaining };
+  return { races, allOddsMap, loading, error, refreshData, lastUpdated, cacheRemaining };
 }
 
 export function useOddsData(raceId: string | null) {

@@ -18,7 +18,7 @@ import {
 } from '../types';
 import { useBettingPreview } from '../hooks/useBettingPreview';
 import { calcFormationSyntheticOdds } from '../lib/synthetic-odds';
-import { IchigekiEligibility } from '../lib/ichigeki-checker';
+import { IchigekiEligibility, IchigekiLevel } from '../lib/ichigeki-checker';
 import { useIchigekiNotification } from '../hooks/useIchigekiNotification';
 
 interface BettingPreviewViewProps {
@@ -703,13 +703,19 @@ function ScoredHorsesRanking({ scoredHorses }: { scoredHorses: ScoredHorse[] }) 
 
 // ===== 一撃判定パネル =====
 function IchigekiEligibilityPanel({ eligibility }: { eligibility: IchigekiEligibility }) {
+  const borderColor = eligibility.level === 'eligible'
+    ? 'rgb(234 179 8 / 0.4)'
+    : eligibility.level === 'semi'
+      ? 'rgb(96 165 250 / 0.4)'
+      : 'var(--border)';
+
   return (
     <div
       className="p-4 rounded-xl border space-y-3"
-      style={{ backgroundColor: 'var(--bg-card)', borderColor: eligibility.eligible ? 'rgb(234 179 8 / 0.4)' : 'var(--border)' }}
+      style={{ backgroundColor: 'var(--bg-card)', borderColor }}
     >
       {/* 合格バナー */}
-      {eligibility.eligible && (
+      {eligibility.level === 'eligible' && (
         <motion.div
           className="flex items-center gap-2 p-3 rounded-lg border"
           style={{ backgroundColor: 'rgb(234 179 8 / 0.1)', borderColor: 'rgb(234 179 8 / 0.3)' }}
@@ -719,6 +725,20 @@ function IchigekiEligibilityPanel({ eligibility }: { eligibility: IchigekiEligib
           <Zap className="w-5 h-5 text-yellow-400" />
           <span className="text-sm font-bold text-yellow-400">一撃対象レース</span>
         </motion.div>
+      )}
+
+      {/* 準勝負バナー */}
+      {eligibility.level === 'semi' && (
+        <div
+          className="flex items-center gap-2 p-3 rounded-lg border"
+          style={{ backgroundColor: 'rgb(96 165 250 / 0.1)', borderColor: 'rgb(96 165 250 / 0.3)' }}
+        >
+          <Zap className="w-5 h-5 text-blue-400" />
+          <span className="text-sm font-bold text-blue-400">準勝負レース</span>
+          <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+            合成オッズが緩和閾値内
+          </span>
+        </div>
       )}
 
       <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -760,6 +780,27 @@ function IchigekiEligibilityPanel({ eligibility }: { eligibility: IchigekiEligib
           </div>
         ))}
       </div>
+
+      {/* 一撃パターン合成オッズ表示 */}
+      {(eligibility.ichigekiSpSynOdds !== null || eligibility.ichigekiStSynOdds !== null) && (
+        <div className="pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+          <div className="text-[10px] font-bold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+            一撃パターン合成オッズ
+          </div>
+          <div className="flex items-center gap-3">
+            {eligibility.ichigekiSpSynOdds !== null && (
+              <span className={`text-xs font-mono font-bold ${eligibility.ichigekiSpSynOdds < 8.0 ? 'text-emerald-400' : eligibility.ichigekiSpSynOdds < 6.5 ? 'text-blue-400' : 'text-red-400'}`}>
+                複 {eligibility.ichigekiSpSynOdds.toFixed(2)}倍
+              </span>
+            )}
+            {eligibility.ichigekiStSynOdds !== null && (
+              <span className={`text-xs font-mono font-bold ${eligibility.ichigekiStSynOdds < 40.0 ? 'text-emerald-400' : eligibility.ichigekiStSynOdds < 30.0 ? 'text-blue-400' : 'text-red-400'}`}>
+                単 {eligibility.ichigekiStSynOdds.toFixed(2)}倍
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -853,14 +894,14 @@ function IchigekiToastBanner({
 
 // ===== FormationCard =====
 function FormationCard({
-  pattern, type, spOddsMap, stOddsMap, onAllocate, ichigekiEligible,
+  pattern, type, spOddsMap, stOddsMap, onAllocate, ichigekiLevel,
 }: {
   pattern: FormationPattern;
   type: '三連複' | '三連単';
   spOddsMap: Map<string, number>;
   stOddsMap: Map<string, number>;
   onAllocate: (title: string, items: { label: string; odds: number }[]) => void;
-  ichigekiEligible?: boolean;
+  ichigekiLevel?: IchigekiLevel;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const synOdds = calcFormationSyntheticOdds(pattern, type, spOddsMap, stOddsMap);
@@ -868,7 +909,9 @@ function FormationCard({
 
   const isIchigeki = pattern.name.includes('一撃');
   const ichigekiBorderColor = isIchigeki
-    ? ichigekiEligible ? 'rgb(234 179 8 / 0.5)' : 'rgb(107 114 128 / 0.4)'
+    ? ichigekiLevel === 'eligible' ? 'rgb(234 179 8 / 0.5)'
+      : ichigekiLevel === 'semi' ? 'rgb(96 165 250 / 0.5)'
+      : 'rgb(107 114 128 / 0.4)'
     : 'var(--border)';
 
   return (
@@ -889,9 +932,13 @@ function FormationCard({
               </span>
               <SyntheticOddsBadge odds={synOdds} />
               {isIchigeki && (
-                ichigekiEligible ? (
+                ichigekiLevel === 'eligible' ? (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
                     対象
+                  </span>
+                ) : ichigekiLevel === 'semi' ? (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
+                    準勝負
                   </span>
                 ) : (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-500/20 text-gray-400">
@@ -1004,13 +1051,13 @@ function FormationCard({
 
 // ===== FormationSection =====
 function FormationSection({
-  formations, spOddsMap, stOddsMap, onAllocate, ichigekiEligible,
+  formations, spOddsMap, stOddsMap, onAllocate, ichigekiLevel,
 }: {
   formations: FormationResult;
   spOddsMap: Map<string, number>;
   stOddsMap: Map<string, number>;
   onAllocate: (title: string, items: { label: string; odds: number }[]) => void;
-  ichigekiEligible?: boolean;
+  ichigekiLevel?: IchigekiLevel;
 }) {
   const [showSanrenpuku, setShowSanrenpuku] = useState(true);
 
@@ -1052,7 +1099,7 @@ function FormationSection({
           >
             {formations.sanrenpuku.length > 0 ? (
               formations.sanrenpuku.map((p, i) => (
-                <FormationCard key={i} pattern={p} type="三連複" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} ichigekiEligible={ichigekiEligible} />
+                <FormationCard key={i} pattern={p} type="三連複" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} ichigekiLevel={ichigekiLevel} />
               ))
             ) : (
               <p className="text-xs p-3" style={{ color: 'var(--text-secondary)' }}>
@@ -1070,7 +1117,7 @@ function FormationSection({
           >
             {formations.sanrentan.length > 0 ? (
               formations.sanrentan.map((p, i) => (
-                <FormationCard key={i} pattern={p} type="三連単" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} ichigekiEligible={ichigekiEligible} />
+                <FormationCard key={i} pattern={p} type="三連単" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} ichigekiLevel={ichigekiLevel} />
               ))
             ) : (
               <p className="text-xs p-3" style={{ color: 'var(--text-secondary)' }}>
@@ -1162,7 +1209,7 @@ export default function BettingPreviewView({ race, odds }: BettingPreviewViewPro
           spOddsMap={spOddsMap}
           stOddsMap={stOddsMap}
           onAllocate={(title, items) => setAllocationTarget({ title, items })}
-          ichigekiEligible={ichigekiEligibility?.eligible}
+          ichigekiLevel={ichigekiEligibility?.level}
         />
       )}
 
