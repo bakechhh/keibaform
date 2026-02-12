@@ -466,19 +466,33 @@ export default function App() {
                   一撃対象レース
                 </span>
                 <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
-                  ({ichigekiScanResults.filter(r => r.level === 'eligible').length}件
+                  ({ichigekiScanResults.filter(r => r.level === 'eligible' && !r.eligibility.weak).length}件
                   {ichigekiScanResults.some(r => r.level === 'semi') &&
                     ` + 準${ichigekiScanResults.filter(r => r.level === 'semi').length}件`
+                  }
+                  {ichigekiScanResults.some(r => r.eligibility.weak && r.level !== 'ineligible') &&
+                    ` + 弱${ichigekiScanResults.filter(r => r.eligibility.weak && r.level !== 'ineligible').length}件`
                   })
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {ichigekiScanResults.map(({ race: r, level, eligibility }) => {
                   const isSemi = level === 'semi';
+                  const isWeak = eligibility.weak;
                   const favOdds = r.horses.reduce(
                     (min, h) => (h.tanshoOdds > 0 && h.tanshoOdds < min) ? h.tanshoOdds : min,
                     Infinity,
                   );
+                  // 色の決定: 弱 > 準 > 通常
+                  const borderActive = isWeak ? 'border-gray-400/60 bg-gray-500/15'
+                    : isSemi ? 'border-blue-400/60 bg-blue-500/15'
+                    : 'border-yellow-400/60 bg-yellow-500/15';
+                  const borderDefault = isWeak ? 'border-gray-400/20 hover:bg-gray-500/10'
+                    : isSemi ? 'border-blue-400/20 hover:bg-blue-500/10'
+                    : 'border-yellow-400/20 hover:bg-yellow-500/10';
+                  const zapColor = isWeak ? 'text-gray-400'
+                    : isSemi ? 'text-blue-400'
+                    : 'text-yellow-400';
                   return (
                     <motion.button
                       key={r.id}
@@ -488,19 +502,22 @@ export default function App() {
                         setViewMode('betting');
                       }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                        selectedRace?.id === r.id
-                          ? isSemi ? 'border-blue-400/60 bg-blue-500/15' : 'border-yellow-400/60 bg-yellow-500/15'
-                          : isSemi ? 'border-blue-400/20 hover:bg-blue-500/10' : 'border-yellow-400/20 hover:bg-yellow-500/10'
+                        selectedRace?.id === r.id ? borderActive : borderDefault
                       }`}
-                      style={{ color: 'var(--text-primary)' }}
+                      style={{ color: isWeak ? 'var(--text-secondary)' : 'var(--text-primary)' }}
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
                     >
-                      <Zap className={`w-3 h-3 ${isSemi ? 'text-blue-400' : 'text-yellow-400'}`} />
+                      <Zap className={`w-3 h-3 ${zapColor}`} />
                       <span className="font-bold">{r.location}{r.round}R</span>
                       {isSemi && (
                         <span className="px-1 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400">
                           準
+                        </span>
+                      )}
+                      {isWeak && (
+                        <span className="px-1 py-0.5 rounded text-[10px] font-bold bg-gray-500/20 text-gray-400">
+                          弱
                         </span>
                       )}
                       <span style={{ color: 'var(--text-secondary)' }}>

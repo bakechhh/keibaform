@@ -25,6 +25,8 @@ export type IchigekiLevel = 'eligible' | 'semi' | 'ineligible';
 export interface IchigekiEligibility {
   eligible: boolean;
   level: IchigekiLevel;
+  weak: boolean;           // 新馬 or 12頭未満（買えるが弱い）
+  weakReasons: string[];
   conditions: IchigekiCondition[];
   avgSanrenpukuSynOdds: number | null;
   avgSanrentanSynOdds: number | null;
@@ -33,8 +35,8 @@ export interface IchigekiEligibility {
 }
 
 /**
- * オッズ不要のクイックチェック（①④⑤⑥）
- * 全レース一覧で候補表示するために使う
+ * オッズ不要のクイックチェック（①⑥のみ）
+ * ④新馬・⑤12頭未満はソフト条件（弱マーカー）なので除外しない
  */
 export interface IchigekiQuickResult {
   candidate: boolean;
@@ -54,20 +56,13 @@ export function quickCheckIchigeki(race: Race): IchigekiQuickResult {
   const favoriteOdds = favorite?.tanshoOdds ?? 0;
   if (favoriteOdds < 3.0) failReasons.push(`1人気${favoriteOdds.toFixed(1)}倍`);
 
-  // ④ 新馬除外
-  if (race.condition.includes('新馬')) failReasons.push('新馬');
-
-  // ⑤ 12頭以上
-  const horseCount = race.horses.length;
-  if (horseCount < 12) failReasons.push(`${horseCount}頭`);
-
   // ⑥ 堅実除外
   if (race.evaluation.type === 'SOLID') failReasons.push('堅実');
 
   return {
     candidate: failReasons.length === 0,
     favoriteOdds,
-    horseCount,
+    horseCount: race.horses.length,
     failReasons,
   };
 }
@@ -185,18 +180,26 @@ export function checkIchigekiEligibility(
   };
 
   const conditions = [cond1, cond2, cond3, cond4, cond5, cond6, cond7];
-  const baseEligible = conditions.every(c => c.passed);
 
-  // レベル判定
+  // コア条件: ①②③⑥⑦（④⑤はソフト条件→弱マーカー）
+  const coreConditions = [cond1, cond2, cond3, cond6, cond7];
+  const coreEligible = coreConditions.every(c => c.passed);
+
+  // ④⑤は弱マーカー（買えるが信頼度低い）
+  const weakReasons: string[] = [];
+  if (!cond4.passed) weakReasons.push('新馬');
+  if (!cond5.passed) weakReasons.push(`${race.horses.length}頭`);
+  const weak = weakReasons.length > 0;
+
+  // レベル判定（④⑤は無関係）
   let level: IchigekiLevel = 'ineligible';
-  if (baseEligible) {
+  if (coreEligible) {
     level = 'eligible';
   } else if (
-    // 条件①〜⑥は全て合格だが⑦だけ不合格 → 準勝負の可能性
-    [cond1, cond2, cond3, cond4, cond5, cond6].every(c => c.passed)
+    // コア条件①②③⑥は合格だが⑦だけ不合格 → 準勝負の可能性
+    [cond1, cond2, cond3, cond6].every(c => c.passed)
     && oddsOverAny
   ) {
-    // 準勝負: 緩和閾値内なら準勝負レース
     const spOk = ichigekiSpSynOdds === null || ichigekiSpSynOdds < ICHIGEKI_SP_SEMI;
     const stOk = ichigekiStSynOdds === null || ichigekiStSynOdds < ICHIGEKI_ST_SEMI;
     if (spOk && stOk) {
@@ -207,6 +210,8 @@ export function checkIchigekiEligibility(
   return {
     eligible: level === 'eligible',
     level,
+    weak,
+    weakReasons,
     conditions,
     avgSanrenpukuSynOdds: avgSpSyn,
     avgSanrentanSynOdds: avgStSyn,

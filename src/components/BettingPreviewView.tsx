@@ -741,6 +741,18 @@ function IchigekiEligibilityPanel({ eligibility }: { eligibility: IchigekiEligib
         </div>
       )}
 
+      {/* 弱マーカー */}
+      {eligibility.weak && eligibility.level !== 'ineligible' && (
+        <div
+          className="flex items-center gap-2 p-2 rounded-lg border"
+          style={{ backgroundColor: 'rgb(107 114 128 / 0.1)', borderColor: 'rgb(107 114 128 / 0.3)' }}
+        >
+          <span className="text-[10px] font-bold text-gray-400">
+            {eligibility.weakReasons.join('・')} — 買えるが信頼度低
+          </span>
+        </div>
+      )}
+
       <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
         <Zap className="w-4 h-4 text-yellow-400" />
         一撃購入条件チェック

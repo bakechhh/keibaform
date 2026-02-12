@@ -431,22 +431,6 @@ function getAiTop(horses: Horse[]): number[] {
 function getIndexTop1(horses: Horse[]): number[] {
   const result = new Set<number>();
   for (const h of horses) {
-    // DEBUG: 各馬のランク1チェック
-    const checks = {
-      num: h.number,
-      winRank: h.predictions.win_rate_rank,
-      placeRank: h.predictions.place_rate_rank,
-      showRank: h.predictions.show_rate_rank,
-      finalRank: h.finalRank,
-      miningRank: h.miningRank,
-      raceEvalRank: h.raceEvalRank,
-      ziRank: h.ziRank,
-      powerRank: h.powerRank,
-    };
-    const hasRank1 = Object.entries(checks).some(([k, v]) => k !== 'num' && v === 1);
-    if (hasRank1) {
-      console.log('[getIndexTop1] rank1 found:', checks);
-    }
     if (h.predictions.win_rate_rank === 1) result.add(h.number);
     if (h.predictions.place_rate_rank === 1) result.add(h.number);
     if (h.predictions.show_rate_rank === 1) result.add(h.number);
@@ -455,13 +439,6 @@ function getIndexTop1(horses: Horse[]): number[] {
     if (h.raceEvalRank === 1) result.add(h.number);
     if (h.ziRank === 1) result.add(h.number);
     if (h.powerRank === 1) result.add(h.number);
-  }
-  console.log('[getIndexTop1] result:', Array.from(result));
-  // 型チェック: ziRankが文字列になってないか確認
-  for (const h of horses) {
-    if (h.ziRank == 1) {  // == で緩い比較
-      console.log(`[getIndexTop1] horse ${h.number} ziRank:`, h.ziRank, typeof h.ziRank, 'strict===1:', h.ziRank === 1);
-    }
   }
   return Array.from(result).sort((a, b) => a - b);
 }
