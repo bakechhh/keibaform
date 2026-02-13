@@ -49,6 +49,8 @@ const createMockHorse = (
     name,
     number,
     jockey: '騎手未定',
+    jockeyStats: null,
+    trainer: null,
     popularity,
     color: COLORS[(number - 1) % COLORS.length],
     predictions: {

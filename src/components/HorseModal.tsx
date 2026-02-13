@@ -8,6 +8,7 @@ import RankBadge from './RankBadge';
 import RankPositionBar from './RankPositionBar';
 import PastRacesTable from './PastRacesTable';
 import RunningStyleAnalysis from './RunningStyleAnalysis';
+import DistanceAptitudeMatrix from './DistanceAptitudeMatrix';
 import { calculateRankDeviationScore } from '../lib/racing-logic';
 import { getBracketColor } from '../lib/bracket-utils';
 import { useHorseMarksContext } from '../contexts/HorseMarksContext';
@@ -19,6 +20,8 @@ interface HorseModalProps {
   isOpen: boolean;
   onClose: () => void;
   totalHorses?: number;
+  raceSurface?: string;
+  raceDistance?: number;
 }
 
 const backdropVariants = {
@@ -69,7 +72,7 @@ const statusLabels: Record<string, { label: string; color: string }> = {
   delete: { label: '✕ 消し', color: '#9ca3af' },
 };
 
-export default function HorseModal({ horse, isOpen, onClose, totalHorses = 18 }: HorseModalProps) {
+export default function HorseModal({ horse, isOpen, onClose, totalHorses = 18, raceSurface, raceDistance }: HorseModalProps) {
   const { getMark, getMemo, setMark, setMemo } = useHorseMarksContext();
   const [memoText, setMemoText] = useState('');
   const [isMemoEditing, setIsMemoEditing] = useState(false);
@@ -510,6 +513,57 @@ export default function HorseModal({ horse, isOpen, onClose, totalHorses = 18 }:
                 </div>
               </motion.div>
 
+              {/* Jockey & Trainer Stats */}
+              {(horse.jockeyStats || horse.trainer) && (
+                <motion.div
+                  className="p-4 rounded-2xl"
+                  style={{ backgroundColor: 'var(--bg-secondary)' }}
+                  variants={itemVariants}
+                >
+                  <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
+                    騎手・調教師成績
+                  </h3>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {horse.jockeyStats && (
+                      <StatsTable
+                        title={`騎手: ${horse.jockeyStats.name}`}
+                        subtitle={horse.jockeyStats.weight_reduction ? `減量: ${horse.jockeyStats.weight_reduction}` : undefined}
+                        thisYear={horse.jockeyStats.this_year}
+                        lastYear={horse.jockeyStats.last_year}
+                        color="#3b82f6"
+                      />
+                    )}
+                    {horse.trainer && (
+                      <StatsTable
+                        title={`調教師: ${horse.trainer.name}`}
+                        subtitle={`所属: ${horse.trainer.affiliation}`}
+                        thisYear={horse.trainer.this_year}
+                        lastYear={horse.trainer.last_year}
+                        color="#8b5cf6"
+                      />
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Distance Aptitude Matrix */}
+              {horse.pastRaces.length > 0 && (
+                <motion.div
+                  className="p-4 rounded-2xl"
+                  style={{ backgroundColor: 'var(--bg-secondary)' }}
+                  variants={itemVariants}
+                >
+                  <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
+                    距離・馬場適性
+                  </h3>
+                  <DistanceAptitudeMatrix
+                    pastRaces={horse.pastRaces}
+                    currentSurface={raceSurface}
+                    currentDistance={raceDistance}
+                  />
+                </motion.div>
+              )}
+
               {/* Performance History (if available) */}
               {horse.pastRaces.length > 0 && (
                 <>
@@ -650,6 +704,58 @@ function ScoreCell({
       <div className={`text-xs font-medium rounded px-2 py-0.5 mt-1 inline-block ${getRankBg(rank)} ${getRankText(rank)}`}>
         {rank}位
       </div>
+    </div>
+  );
+}
+
+function StatsTable({
+  title,
+  subtitle,
+  thisYear,
+  lastYear,
+  color,
+}: {
+  title: string;
+  subtitle?: string;
+  thisYear: { wins: number; win_rate: number; place_rate: number; show_rate: number };
+  lastYear: { wins: number; win_rate: number; place_rate: number; show_rate: number };
+  color: string;
+}) {
+  return (
+    <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg-card)' }}>
+      <div className="mb-2">
+        <div className="text-sm font-bold" style={{ color }}>{title}</div>
+        {subtitle && (
+          <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{subtitle}</div>
+        )}
+      </div>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
+            <th className="py-1 text-left" style={{ color: 'var(--text-secondary)' }}></th>
+            <th className="py-1 text-right" style={{ color: 'var(--text-secondary)' }}>勝利</th>
+            <th className="py-1 text-right" style={{ color: 'var(--text-secondary)' }}>勝率</th>
+            <th className="py-1 text-right" style={{ color: 'var(--text-secondary)' }}>連対率</th>
+            <th className="py-1 text-right" style={{ color: 'var(--text-secondary)' }}>複勝率</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
+            <td className="py-1 font-bold" style={{ color: 'var(--text-primary)' }}>今年</td>
+            <td className="py-1 text-right font-mono" style={{ color: 'var(--text-primary)' }}>{thisYear.wins}</td>
+            <td className="py-1 text-right font-mono font-bold" style={{ color }}>{thisYear.win_rate.toFixed(1)}%</td>
+            <td className="py-1 text-right font-mono" style={{ color: 'var(--text-primary)' }}>{thisYear.place_rate.toFixed(1)}%</td>
+            <td className="py-1 text-right font-mono" style={{ color: 'var(--text-primary)' }}>{thisYear.show_rate.toFixed(1)}%</td>
+          </tr>
+          <tr>
+            <td className="py-1" style={{ color: 'var(--text-secondary)' }}>昨年</td>
+            <td className="py-1 text-right font-mono" style={{ color: 'var(--text-secondary)' }}>{lastYear.wins}</td>
+            <td className="py-1 text-right font-mono" style={{ color: 'var(--text-secondary)' }}>{lastYear.win_rate.toFixed(1)}%</td>
+            <td className="py-1 text-right font-mono" style={{ color: 'var(--text-secondary)' }}>{lastYear.place_rate.toFixed(1)}%</td>
+            <td className="py-1 text-right font-mono" style={{ color: 'var(--text-secondary)' }}>{lastYear.show_rate.toFixed(1)}%</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }

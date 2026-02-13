@@ -3,9 +3,12 @@ import { Horse } from '../types';
 import { getBracketColor } from '../lib/bracket-utils';
 import { useHorseMarksContext } from '../contexts/HorseMarksContext';
 import { DropdownMarkSelector } from './HorseMarkSelector';
+import PaceSimulation from './PaceSimulation';
 
 interface RaceAnalysisViewProps {
   horses: Horse[];
+  raceDistance?: number;
+  raceSurface?: string;
 }
 
 // PCI分類を計算
@@ -371,7 +374,7 @@ function PaceMarginAnalysis({ horseAnalysis, totalHorses }: PaceMarginAnalysisPr
   );
 }
 
-export default function RaceAnalysisView({ horses }: RaceAnalysisViewProps) {
+export default function RaceAnalysisView({ horses, raceDistance, raceSurface }: RaceAnalysisViewProps) {
   const totalHorses = horses.length;
   const { getMark, setMark, getMemo } = useHorseMarksContext();
 
@@ -414,6 +417,14 @@ export default function RaceAnalysisView({ horses }: RaceAnalysisViewProps) {
 
   return (
     <div className="space-y-6">
+      {/* Pace Simulation */}
+      <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-card)' }}>
+        <h4 className="text-sm font-bold mb-3" style={{ color: 'var(--text-primary)' }}>
+          ペースシミュレーション
+        </h4>
+        <PaceSimulation horses={horses} raceDistance={raceDistance} raceSurface={raceSurface} />
+      </div>
+
       {/* 3F位置図（全馬） - 右回りコース対応（右がゴール） */}
       <div>
         <h4 className="text-sm font-bold mb-3" style={{ color: 'var(--text-primary)' }}>

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { PastRace } from '../types';
+import { bracketColors } from '../lib/bracket-utils';
 
 interface PastRacesTableProps {
   pastRaces: PastRace[];
@@ -118,11 +119,37 @@ export default function PastRacesTable({ pastRaces }: PastRacesTableProps) {
               <td className="py-2 px-1 text-right font-mono whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
                 {race.distance}
               </td>
-              <td className="py-2 px-1 text-center font-mono" style={{ color: 'var(--text-secondary)' }}>
-                {race.frame || '-'}
+              <td className="py-2 px-1 text-center font-mono">
+                {race.frame ? (
+                  <span
+                    className="inline-flex w-5 h-5 rounded items-center justify-center text-[10px] font-bold border"
+                    style={{
+                      backgroundColor: (bracketColors[race.frame] || bracketColors[1]).bg,
+                      color: (bracketColors[race.frame] || bracketColors[1]).text,
+                      borderColor: (bracketColors[race.frame] || bracketColors[1]).bg === '#FFFFFF' ? '#999' : 'transparent',
+                    }}
+                  >
+                    {race.frame}
+                  </span>
+                ) : (
+                  <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                )}
               </td>
-              <td className="py-2 px-1 text-center font-mono" style={{ color: 'var(--text-secondary)' }}>
-                {race.horseNumber || '-'}
+              <td className="py-2 px-1 text-center font-mono">
+                {race.horseNumber ? (
+                  <span
+                    className="inline-flex w-5 h-5 rounded items-center justify-center text-[10px] font-bold border"
+                    style={{
+                      backgroundColor: (bracketColors[race.frame] || bracketColors[1]).bg,
+                      color: (bracketColors[race.frame] || bracketColors[1]).text,
+                      borderColor: (bracketColors[race.frame] || bracketColors[1]).bg === '#FFFFFF' ? '#999' : 'transparent',
+                    }}
+                  >
+                    {race.horseNumber}
+                  </span>
+                ) : (
+                  <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                )}
               </td>
               <td className="py-2 px-1 text-center font-mono whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
                 {race.weight}{race.weightReduction && <span className="text-xs text-red-400">{race.weightReduction}</span>}

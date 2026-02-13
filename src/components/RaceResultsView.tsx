@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Trophy, Clock, AlertCircle, Check, X as XIcon } from 'lucide-react';
 import { RaceResult } from '../types/raceResults';
-import { getBracketColor } from '../lib/bracket-utils';
+import { getBracketColor, bracketColors } from '../lib/bracket-utils';
 import { useHorseMarksContext } from '../contexts/HorseMarksContext';
 import { HorseMarkBadge } from './HorseMarkSelector';
 
@@ -180,22 +180,22 @@ export default function RaceResultsView({
           </h5>
           <div className="space-y-1">
             {/* 単勝・複勝 */}
-            <PayoutRow label="単勝" items={data.払戻.単勝} formatPayout={formatPayout} getPayoutColor={getPayoutColor} />
-            <PayoutRow label="複勝" items={data.払戻.複勝} formatPayout={formatPayout} getPayoutColor={getPayoutColor} />
+            <PayoutRow label="単勝" items={data.払戻.単勝} formatPayout={formatPayout} getPayoutColor={getPayoutColor} totalHorses={totalHorses} />
+            <PayoutRow label="複勝" items={data.払戻.複勝} formatPayout={formatPayout} getPayoutColor={getPayoutColor} totalHorses={totalHorses} />
 
             <div className="border-t my-2" style={{ borderColor: 'var(--border)' }} />
 
             {/* 枠連・馬連・ワイド */}
-            <PayoutRow label="枠連" items={data.払戻.枠連} formatPayout={formatPayout} getPayoutColor={getPayoutColor} />
-            <PayoutRow label="馬連" items={data.払戻.馬連} formatPayout={formatPayout} getPayoutColor={getPayoutColor} />
-            <PayoutRow label="ワイド" items={data.払戻.ワイド} formatPayout={formatPayout} getPayoutColor={getPayoutColor} />
+            <PayoutRow label="枠連" items={data.払戻.枠連} formatPayout={formatPayout} getPayoutColor={getPayoutColor} totalHorses={totalHorses} />
+            <PayoutRow label="馬連" items={data.払戻.馬連} formatPayout={formatPayout} getPayoutColor={getPayoutColor} totalHorses={totalHorses} />
+            <PayoutRow label="ワイド" items={data.払戻.ワイド} formatPayout={formatPayout} getPayoutColor={getPayoutColor} totalHorses={totalHorses} />
 
             <div className="border-t my-2" style={{ borderColor: 'var(--border)' }} />
 
             {/* 馬単・3連複・3連単 */}
-            <PayoutRow label="馬単" items={data.払戻.馬単} formatPayout={formatPayout} getPayoutColor={getPayoutColor} />
-            <PayoutRow label="3連複" items={data.払戻['3連複']} formatPayout={formatPayout} getPayoutColor={getPayoutColor} />
-            <PayoutRow label="3連単" items={data.払戻['3連単']} formatPayout={formatPayout} getPayoutColor={getPayoutColor} highlight />
+            <PayoutRow label="馬単" items={data.払戻.馬単} formatPayout={formatPayout} getPayoutColor={getPayoutColor} totalHorses={totalHorses} />
+            <PayoutRow label="3連複" items={data.払戻['3連複']} formatPayout={formatPayout} getPayoutColor={getPayoutColor} totalHorses={totalHorses} />
+            <PayoutRow label="3連単" items={data.払戻['3連単']} formatPayout={formatPayout} getPayoutColor={getPayoutColor} totalHorses={totalHorses} highlight />
           </div>
         </div>
       </div>
@@ -276,18 +276,81 @@ function MarkSummary({
   );
 }
 
+// 組み合わせ番号を枠番色で表示するコンポーネント
+function ColoredCombination({
+  combination,
+  totalHorses,
+  isWakuren,
+}: {
+  combination: string;
+  totalHorses: number;
+  isWakuren: boolean;
+}) {
+  // "1-2-3" や "1→2→3" 等のフォーマットをパース
+  const parts = combination.split(/([→\-=])/);
+  return (
+    <span className="inline-flex items-center gap-0.5 font-mono text-sm">
+      {parts.map((part, i) => {
+        const num = parseInt(part, 10);
+        if (!isNaN(num)) {
+          if (isWakuren) {
+            // 枠連は枠番なので bracketColors を直接使う
+            const color = bracketColors[num] || bracketColors[1];
+            return (
+              <span
+                key={i}
+                className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold border"
+                style={{
+                  backgroundColor: color.bg,
+                  color: color.text,
+                  borderColor: color.bg === '#FFFFFF' ? '#999' : 'transparent',
+                }}
+              >
+                {num}
+              </span>
+            );
+          } else {
+            const color = getBracketColor(num, totalHorses);
+            return (
+              <span
+                key={i}
+                className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold border"
+                style={{
+                  backgroundColor: color.bg,
+                  color: color.text,
+                  borderColor: color.bg === '#FFFFFF' ? '#999' : 'transparent',
+                }}
+              >
+                {num}
+              </span>
+            );
+          }
+        }
+        // セパレータ (-, →, =)
+        return (
+          <span key={i} className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+            {part}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 // 払戻行コンポーネント
 function PayoutRow({
   label,
   items,
   formatPayout,
   getPayoutColor,
+  totalHorses,
   highlight = false,
 }: {
   label: string;
   items: { 払出: string; 組み合わせ: string }[];
   formatPayout: (p: string) => string;
   getPayoutColor: (p: string) => string;
+  totalHorses: number;
   highlight?: boolean;
 }) {
   if (!items || items.length === 0) {
@@ -301,6 +364,8 @@ function PayoutRow({
     );
   }
 
+  const isWakuren = label === '枠連';
+
   return (
     <div className={`py-1 ${highlight ? 'bg-amber-500/10 rounded px-2 -mx-2' : ''}`}>
       {items.map((item, index) => (
@@ -308,8 +373,12 @@ function PayoutRow({
           <span className="w-14 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
             {index === 0 ? label : ''}
           </span>
-          <span className="w-20 font-mono text-sm" style={{ color: 'var(--text-primary)' }}>
-            {item.組み合わせ}
+          <span className="w-24">
+            <ColoredCombination
+              combination={item.組み合わせ}
+              totalHorses={totalHorses}
+              isWakuren={isWakuren}
+            />
           </span>
           <span
             className="font-bold text-right flex-1"

@@ -107,6 +107,7 @@ export default function ComparisonBarChart({ horses }: ComparisonBarChartProps) 
             type="category"
             dataKey="name"
             width={30}
+            interval={0}
             tick={({ x, y, index }) => {
               // indexを使って直接ソート済みデータにアクセス
               const item = data[index];

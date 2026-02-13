@@ -210,6 +210,8 @@ export interface Horse {
   name: string;
   number: number;
   jockey: string;
+  jockeyStats: RawJockey | null;
+  trainer: RawTrainer | null;
   popularity: number;
   color: string;
 

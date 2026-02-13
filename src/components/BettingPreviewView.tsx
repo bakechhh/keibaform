@@ -20,6 +20,7 @@ import { useBettingPreview } from '../hooks/useBettingPreview';
 import { calcFormationSyntheticOdds } from '../lib/synthetic-odds';
 import { IchigekiEligibility, IchigekiLevel } from '../lib/ichigeki-checker';
 import { useIchigekiNotification } from '../hooks/useIchigekiNotification';
+import { getBracketColor } from '../lib/bracket-utils';
 
 interface BettingPreviewViewProps {
   race: Race;
@@ -529,12 +530,14 @@ function ModeColumn({
   borderColorClass,
   raceBets,
   onAllocate,
+  totalHorses,
 }: {
   label: string;
   colorClass: string;
   borderColorClass: string;
   raceBets: RaceBets | null;
   onAllocate: (title: string, items: { label: string; odds: number }[]) => void;
+  totalHorses: number;
 }) {
   if (!raceBets || raceBets.bets.length === 0) {
     return (
@@ -584,19 +587,36 @@ function ModeColumn({
       </div>
 
       {tansho.length > 0 && (
-        <BetSection title="単勝" bets={tansho} />
+        <BetSection title="単勝" bets={tansho} totalHorses={totalHorses} />
       )}
       {wide.length > 0 && (
-        <BetSection title="ワイド" bets={wide} />
+        <BetSection title="ワイド" bets={wide} totalHorses={totalHorses} />
       )}
       {umaren.length > 0 && (
-        <BetSection title="馬連" bets={umaren} />
+        <BetSection title="馬連" bets={umaren} totalHorses={totalHorses} />
       )}
     </div>
   );
 }
 
-function BetSection({ title, bets }: { title: string; bets: Bet[] }) {
+// 馬番バッジ（枠番色付き）
+function UmabanBadge({ umaban, totalHorses }: { umaban: number; totalHorses: number }) {
+  const color = getBracketColor(umaban, totalHorses);
+  return (
+    <span
+      className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold border flex-shrink-0"
+      style={{
+        backgroundColor: color.bg,
+        color: color.text,
+        borderColor: color.bg === '#FFFFFF' ? '#999' : 'transparent',
+      }}
+    >
+      {umaban}
+    </span>
+  );
+}
+
+function BetSection({ title, bets, totalHorses }: { title: string; bets: Bet[]; totalHorses: number }) {
   const synOdds = calculateSyntheticOdds(bets);
   const totalAmount = bets.reduce((sum, b) => sum + b.amount, 0);
 
@@ -620,15 +640,16 @@ function BetSection({ title, bets }: { title: string; bets: Bet[] }) {
             className="flex items-center justify-between px-2 py-1 rounded text-xs"
             style={{ backgroundColor: 'var(--bg-secondary)' }}
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="font-mono font-bold flex-shrink-0" style={{ color: 'var(--text-primary)' }}>
-                {bet.umaban}
-                {bet.umaban2 > 0 && (
-                  <span style={{ color: 'var(--text-secondary)' }}>
-                    {bet.type === 'ワイド' ? '→' : '='}{bet.umaban2}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <UmabanBadge umaban={bet.umaban} totalHorses={totalHorses} />
+              {bet.umaban2 > 0 && (
+                <>
+                  <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                    {bet.type === 'ワイド' ? '→' : '='}
                   </span>
-                )}
-              </span>
+                  <UmabanBadge umaban={bet.umaban2} totalHorses={totalHorses} />
+                </>
+              )}
               <span className="truncate" style={{ color: 'var(--text-secondary)' }} title={bet.reason}>
                 {bet.reason}
               </span>
@@ -651,7 +672,7 @@ function BetSection({ title, bets }: { title: string; bets: Bet[] }) {
 }
 
 // ===== ScoredHorsesRanking =====
-function ScoredHorsesRanking({ scoredHorses }: { scoredHorses: ScoredHorse[] }) {
+function ScoredHorsesRanking({ scoredHorses, totalHorses }: { scoredHorses: ScoredHorse[]; totalHorses: number }) {
   if (scoredHorses.length === 0) return null;
 
   const rankColors: Record<string, string> = {
@@ -679,9 +700,7 @@ function ScoredHorsesRanking({ scoredHorses }: { scoredHorses: ScoredHorse[] }) 
             <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center text-white ${rankColors[h.rank] ?? 'bg-gray-400'}`}>
               {h.rank}
             </span>
-            <span className="font-mono text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-              {h.umaban}
-            </span>
+            <UmabanBadge umaban={h.umaban} totalHorses={totalHorses} />
             <span className="text-xs truncate max-w-[60px]" style={{ color: 'var(--text-primary)' }}>
               {h.name}
             </span>
@@ -906,7 +925,7 @@ function IchigekiToastBanner({
 
 // ===== FormationCard =====
 function FormationCard({
-  pattern, type, spOddsMap, stOddsMap, onAllocate, ichigekiLevel,
+  pattern, type, spOddsMap, stOddsMap, onAllocate, ichigekiLevel, totalHorses,
 }: {
   pattern: FormationPattern;
   type: '三連複' | '三連単';
@@ -914,6 +933,7 @@ function FormationCard({
   stOddsMap: Map<string, number>;
   onAllocate: (title: string, items: { label: string; odds: number }[]) => void;
   ichigekiLevel?: IchigekiLevel;
+  totalHorses: number;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const synOdds = calcFormationSyntheticOdds(pattern, type, spOddsMap, stOddsMap);
@@ -1002,9 +1022,7 @@ function FormationCard({
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {pattern.col1.map(n => (
-                      <span key={n} className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 text-xs font-bold font-mono">
-                        {n}
-                      </span>
+                      <UmabanBadge key={n} umaban={n} totalHorses={totalHorses} />
                     ))}
                   </div>
                 </div>
@@ -1014,9 +1032,7 @@ function FormationCard({
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {pattern.col2.map(n => (
-                      <span key={n} className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs font-bold font-mono">
-                        {n}
-                      </span>
+                      <UmabanBadge key={n} umaban={n} totalHorses={totalHorses} />
                     ))}
                   </div>
                 </div>
@@ -1026,9 +1042,7 @@ function FormationCard({
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {pattern.col3.map(n => (
-                      <span key={n} className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-xs font-bold font-mono">
-                        {n}
-                      </span>
+                      <UmabanBadge key={n} umaban={n} totalHorses={totalHorses} />
                     ))}
                   </div>
                 </div>
@@ -1063,13 +1077,14 @@ function FormationCard({
 
 // ===== FormationSection =====
 function FormationSection({
-  formations, spOddsMap, stOddsMap, onAllocate, ichigekiLevel,
+  formations, spOddsMap, stOddsMap, onAllocate, ichigekiLevel, totalHorses,
 }: {
   formations: FormationResult;
   spOddsMap: Map<string, number>;
   stOddsMap: Map<string, number>;
   onAllocate: (title: string, items: { label: string; odds: number }[]) => void;
   ichigekiLevel?: IchigekiLevel;
+  totalHorses: number;
 }) {
   const [showSanrenpuku, setShowSanrenpuku] = useState(true);
 
@@ -1111,7 +1126,7 @@ function FormationSection({
           >
             {formations.sanrenpuku.length > 0 ? (
               formations.sanrenpuku.map((p, i) => (
-                <FormationCard key={i} pattern={p} type="三連複" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} ichigekiLevel={ichigekiLevel} />
+                <FormationCard key={i} pattern={p} type="三連複" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} ichigekiLevel={ichigekiLevel} totalHorses={totalHorses} />
               ))
             ) : (
               <p className="text-xs p-3" style={{ color: 'var(--text-secondary)' }}>
@@ -1129,7 +1144,7 @@ function FormationSection({
           >
             {formations.sanrentan.length > 0 ? (
               formations.sanrentan.map((p, i) => (
-                <FormationCard key={i} pattern={p} type="三連単" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} ichigekiLevel={ichigekiLevel} />
+                <FormationCard key={i} pattern={p} type="三連単" spOddsMap={spOddsMap} stOddsMap={stOddsMap} onAllocate={onAllocate} ichigekiLevel={ichigekiLevel} totalHorses={totalHorses} />
               ))
             ) : (
               <p className="text-xs p-3" style={{ color: 'var(--text-secondary)' }}>
@@ -1159,6 +1174,8 @@ export default function BettingPreviewView({ race, odds }: BettingPreviewViewPro
     items: { label: string; odds: number }[];
   } | null>(null);
 
+  const totalHorses = race.horses.length;
+
   return (
     <div className="space-y-4">
       {/* 一撃トースト通知 */}
@@ -1183,6 +1200,7 @@ export default function BettingPreviewView({ race, odds }: BettingPreviewViewPro
             borderColorClass="border-blue-500/30"
             raceBets={compareResult.normal}
             onAllocate={(title, items) => setAllocationTarget({ title, items })}
+            totalHorses={totalHorses}
           />
           <ModeColumn
             label="裏モード"
@@ -1190,6 +1208,7 @@ export default function BettingPreviewView({ race, odds }: BettingPreviewViewPro
             borderColorClass="border-orange-500/30"
             raceBets={compareResult.ura}
             onAllocate={(title, items) => setAllocationTarget({ title, items })}
+            totalHorses={totalHorses}
           />
           <ModeColumn
             label="暴走モード"
@@ -1197,13 +1216,14 @@ export default function BettingPreviewView({ race, odds }: BettingPreviewViewPro
             borderColorClass="border-purple-500/30"
             raceBets={compareResult.bousou}
             onAllocate={(title, items) => setAllocationTarget({ title, items })}
+            totalHorses={totalHorses}
           />
         </div>
       )}
 
       {/* Scored Horses Ranking */}
       {formationResult && (
-        <ScoredHorsesRanking scoredHorses={formationResult.scoredHorses} />
+        <ScoredHorsesRanking scoredHorses={formationResult.scoredHorses} totalHorses={totalHorses} />
       )}
 
       {/* 一撃判定パネル + 合成オッズ分析 */}
@@ -1222,6 +1242,7 @@ export default function BettingPreviewView({ race, odds }: BettingPreviewViewPro
           stOddsMap={stOddsMap}
           onAllocate={(title, items) => setAllocationTarget({ title, items })}
           ichigekiLevel={ichigekiEligibility?.level}
+          totalHorses={totalHorses}
         />
       )}
 

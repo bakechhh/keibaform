@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, BarChart3, Filter, RefreshCw, Loader2, AlertCircle, Users, DollarSign, Radar, TrendingUp, Trophy, Calculator, Zap } from 'lucide-react';
+import { Sparkles, BarChart3, Filter, RefreshCw, Loader2, AlertCircle, Users, DollarSign, Radar, TrendingUp, Trophy, Calculator, Zap, LayoutGrid } from 'lucide-react';
 import { Race, Horse, HorseFilters, RaceFilters } from './types';
 import { useRaceData, useOddsData } from './hooks/useRaceData';
 import { useRaceResults } from './hooks/useRaceResults';
@@ -19,6 +19,7 @@ import RaceNavigation from './components/RaceNavigation';
 import RaceResultsView from './components/RaceResultsView';
 import ExpectedValueAnalysis from './components/ExpectedValueAnalysis';
 import BettingPreviewView from './components/BettingPreviewView';
+import SummaryView from './components/SummaryView';
 import ExportPanel from './components/ExportPanel';
 import FilterTemplateSelector from './components/FilterTemplateSelector';
 import { FilterCondition, applyFilterConditions } from './hooks/useFilterTemplates';
@@ -31,7 +32,7 @@ import AdvancedFilters, {
 } from './components/AdvancedFilters';
 
 type SortOption = 'number' | 'odds' | 'rating' | 'power' | 'popularity' | 'ai_win' | 'ai_place' | 'ai_show' | 'final_score' | 'mining' | 'race_eval' | 'zi';
-type ViewMode = 'horses' | 'odds' | 'analysis' | 'results' | 'betting';
+type ViewMode = 'horses' | 'odds' | 'analysis' | 'results' | 'betting' | 'summary';
 type AnalysisTab = 'overview' | 'expected_value';
 
 export default function App() {
@@ -554,7 +555,7 @@ export default function App() {
         )}
 
         {/* View Mode Toggle & Navigation */}
-        {selectedRace && (
+        {(selectedRace || races.length > 0) && (
           <motion.section
             className="flex items-center gap-2 flex-wrap"
             initial={{ opacity: 0 }}
@@ -653,6 +654,24 @@ export default function App() {
               <Calculator className="w-4 h-4" />
               馬券
             </motion.button>
+            <motion.button
+              onClick={() => setViewMode('summary')}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors
+                ${viewMode === 'summary'
+                  ? 'bg-purple-500 text-white'
+                  : 'border border-[var(--border)]'
+                }
+              `}
+              style={{
+                color: viewMode === 'summary' ? undefined : 'var(--text-secondary)',
+              }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              サマリー
+            </motion.button>
 
             {/* Race Navigation */}
             <div className="ml-auto">
@@ -665,6 +684,33 @@ export default function App() {
             </div>
           </motion.section>
         )}
+
+        {/* Summary View */}
+        <AnimatePresence mode="wait">
+          {viewMode === 'summary' && races.length > 0 && (
+            <motion.section
+              key="summary"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="p-4 rounded-2xl"
+              style={{ backgroundColor: 'var(--bg-card)' }}
+            >
+              <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
+                本日のサマリー
+              </h3>
+              <SummaryView
+                races={races}
+                getResultByVenueRound={getResultByVenueRound}
+                onRaceSelect={(race) => {
+                  setSelectedRace(race);
+                  setSelectedVenue(race.location);
+                  setViewMode('horses');
+                }}
+              />
+            </motion.section>
+          )}
+        </AnimatePresence>
 
         {/* Odds View */}
         <AnimatePresence mode="wait">
@@ -747,7 +793,7 @@ export default function App() {
                     <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
                       レース分析
                     </h3>
-                    <RaceAnalysisView horses={selectedRace.horses} />
+                    <RaceAnalysisView horses={selectedRace.horses} raceDistance={selectedRace.distance} raceSurface={selectedRace.surface} />
                   </motion.div>
                 )}
 
@@ -1066,6 +1112,8 @@ export default function App() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         totalHorses={selectedRace?.horses.length}
+        raceSurface={selectedRace?.surface}
+        raceDistance={selectedRace?.distance}
       />
 
       {/* Horse Comparison Modal */}

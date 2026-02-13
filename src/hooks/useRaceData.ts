@@ -9,6 +9,8 @@ import {
   RawOddsEntry,
   RawRaceResult,
   RawPastRace,
+  RawJockey,
+  RawTrainer,
   RaceResultDisplay,
 } from '../types';
 import {
@@ -20,7 +22,7 @@ import {
 } from '../lib/racing-logic';
 
 // キャッシュ設定
-const CACHE_KEY = 'umaai-race-data-cache';
+const CACHE_KEY = 'umaai-race-data-cache-v2';
 const CACHE_EXPIRY_MS = 10 * 60 * 1000; // 10分
 
 interface CacheData {
@@ -158,11 +160,19 @@ function transformRaceData(
       ? h.jockey.name
       : (h.jockey || '未定');
 
+    const jockeyStats: RawJockey | null = typeof h.jockey === 'object' && h.jockey !== null
+      ? h.jockey as RawJockey
+      : null;
+
+    const trainerData: RawTrainer | null = h.trainer ?? null;
+
     return {
       id: `${rawRace.race_id}-${h.horse_number}`,
       name: h.horse_name,
       number: h.horse_number,
       jockey: jockeyName,
+      jockeyStats,
+      trainer: trainerData,
       popularity: h.popularity ?? 99,
       color: getHorseColor(h.horse_number),
       predictions: h.predictions,

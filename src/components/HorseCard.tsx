@@ -81,9 +81,19 @@ export default function HorseCard({ horse, index, totalHorses = 18, onClick }: H
             <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
               {horse.name}
             </h3>
-            <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <div className="flex items-center gap-2 text-sm flex-wrap" style={{ color: 'var(--text-secondary)' }}>
               <User className="w-3 h-3" />
               <span>{horse.jockey}</span>
+              {horse.jockeyStats?.this_year && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400">
+                  騎{horse.jockeyStats.this_year.win_rate.toFixed(1)}%
+                </span>
+              )}
+              {horse.trainer?.this_year && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-400">
+                  厩{horse.trainer.this_year.win_rate.toFixed(1)}%
+                </span>
+              )}
             </div>
             {currentMemo && (
               <div className="flex items-center gap-1 mt-1">

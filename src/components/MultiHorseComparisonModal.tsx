@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { Horse } from '../types';
+import { getBracketColor } from '../lib/bracket-utils';
 
 interface MultiHorseComparisonModalProps {
   horses: Horse[];
@@ -98,17 +99,23 @@ export default function MultiHorseComparisonModal({
 
               {/* Selected Horses */}
               <div className="flex flex-wrap gap-2 mt-4">
-                {selectedHorses.map((horse) => (
+                {selectedHorses.map((horse) => {
+                  const bracketColor = getBracketColor(horse.number, horses.length);
+                  return (
                   <motion.div
                     key={horse.id}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-                    style={{ backgroundColor: horse.color + '30', border: `2px solid ${horse.color}` }}
+                    style={{ backgroundColor: bracketColor.bg + '30', border: `2px solid ${bracketColor.bg}` }}
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                   >
                     <span
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                      style={{ backgroundColor: horse.color }}
+                      className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold border"
+                      style={{
+                        backgroundColor: bracketColor.bg,
+                        color: bracketColor.text,
+                        borderColor: bracketColor.bg === '#FFFFFF' ? '#999' : 'transparent',
+                      }}
                     >
                       {horse.number}
                     </span>
@@ -122,7 +129,8 @@ export default function MultiHorseComparisonModal({
                       <Trash2 className="w-3 h-3 text-red-400" />
                     </button>
                   </motion.div>
-                ))}
+                  );
+                })}
                 {selectedHorses.length === 0 && (
                   <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                     下のリストから馬を選択してください
@@ -140,6 +148,7 @@ export default function MultiHorseComparisonModal({
                 <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
                   {horses.map((horse) => {
                     const isSelected = selectedHorses.some(h => h.id === horse.id);
+                    const bColor = getBracketColor(horse.number, horses.length);
                     return (
                       <motion.button
                         key={horse.id}
@@ -158,8 +167,12 @@ export default function MultiHorseComparisonModal({
                         whileHover={!isSelected && selectedHorses.length < 5 ? { scale: 1.01 } : {}}
                       >
                         <div
-                          className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
-                          style={{ backgroundColor: horse.color }}
+                          className="w-10 h-10 rounded-lg flex items-center justify-center font-bold border-2"
+                          style={{
+                            backgroundColor: bColor.bg,
+                            color: bColor.text,
+                            borderColor: bColor.bg === '#FFFFFF' ? '#999' : 'transparent',
+                          }}
                         >
                           {horse.number}
                         </div>
@@ -222,13 +235,19 @@ export default function MultiHorseComparisonModal({
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedHorses.map((horse) => (
+                        {selectedHorses.map((horse) => {
+                          const tColor = getBracketColor(horse.number, horses.length);
+                          return (
                           <tr key={horse.id} className="border-b" style={{ borderColor: 'var(--border)' }}>
                             <td className="py-2 px-1">
                               <div className="flex items-center gap-1">
                                 <span
-                                  className="w-5 h-5 rounded text-white text-xs font-bold flex items-center justify-center flex-shrink-0"
-                                  style={{ backgroundColor: horse.color }}
+                                  className="w-5 h-5 rounded text-xs font-bold flex items-center justify-center flex-shrink-0 border"
+                                  style={{
+                                    backgroundColor: tColor.bg,
+                                    color: tColor.text,
+                                    borderColor: tColor.bg === '#FFFFFF' ? '#999' : 'transparent',
+                                  }}
                                 >
                                   {horse.number}
                                 </span>
@@ -263,7 +282,8 @@ export default function MultiHorseComparisonModal({
                               {horse.powerScore.toFixed(0)}
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
