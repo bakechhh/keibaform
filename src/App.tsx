@@ -701,6 +701,7 @@ export default function App() {
               </h3>
               <SummaryView
                 races={races}
+                ichigekiScanResults={ichigekiScanResults}
                 getResultByVenueRound={getResultByVenueRound}
                 onRaceSelect={(race) => {
                   setSelectedRace(race);

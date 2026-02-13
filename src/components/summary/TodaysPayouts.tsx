@@ -11,37 +11,76 @@ function formatPayout(amount: number): string {
   return amount.toLocaleString() + '円';
 }
 
-// Normalize RaceResult into a simple format for display
+// Payout line: label + combination + amount
+interface PayoutLine {
+  label: string;
+  combination: string;
+  amount: number;
+}
+
+// Normalized result with ALL payout types
 interface NormalizedResult {
   finishOrder: { position: number; horseName: string; horseNum: number }[];
-  tansho: number | null;
-  sanrenpuku: number | null;
-  sanrentan: number | null;
+  payouts: PayoutLine[];
 }
+
+const payoutTypeMap: [keyof import('../../types').RaceResultDisplay['payouts'], string][] = [
+  ['tansho', '単勝'],
+  ['fukusho', '複勝'],
+  ['wakuren', '枠連'],
+  ['umaren', '馬連'],
+  ['umatan', '馬単'],
+  ['wide', 'ワイド'],
+  ['sanrenpuku', '3連複'],
+  ['sanrentan', '3連単'],
+];
+
+const rawPayoutKeys: [string, string][] = [
+  ['単勝', '単勝'],
+  ['複勝', '複勝'],
+  ['枠連', '枠連'],
+  ['馬連', '馬連'],
+  ['馬単', '馬単'],
+  ['ワイド', 'ワイド'],
+  ['3連複', '3連複'],
+  ['3連単', '3連単'],
+];
 
 function normalizeResult(race: Race, raw: RaceResult | undefined): NormalizedResult | null {
   // Prefer race.result (RaceResultDisplay) if available
   if (race.result) {
     const r = race.result;
-    return {
-      finishOrder: r.finishOrder,
-      tansho: r.payouts.tansho?.[0]?.payout ?? null,
-      sanrenpuku: r.payouts.sanrenpuku?.[0]?.payout ?? null,
-      sanrentan: r.payouts.sanrentan?.[0]?.payout ?? null,
-    };
+    const payouts: PayoutLine[] = [];
+    for (const [key, label] of payoutTypeMap) {
+      const items = r.payouts[key];
+      if (items) {
+        for (const item of items) {
+          payouts.push({ label, combination: item.combination, amount: item.payout });
+        }
+      }
+    }
+    return { finishOrder: r.finishOrder, payouts };
   }
   if (!raw) return null;
 
   const d = raw.data;
+  const payouts: PayoutLine[] = [];
+  for (const [jpKey, label] of rawPayoutKeys) {
+    const items = (d.払戻 as unknown as Record<string, { 払出: string; 組み合わせ: string }[] | undefined>)[jpKey];
+    if (items) {
+      for (const item of items) {
+        payouts.push({ label, combination: item.組み合わせ, amount: parseInt(item.払出, 10) || 0 });
+      }
+    }
+  }
+
   return {
     finishOrder: (d.着順 || []).map(f => ({
       position: parseInt(f.着順, 10),
       horseName: f.馬名,
       horseNum: parseInt(f.馬番, 10),
     })),
-    tansho: d.払戻?.単勝?.[0] ? parseInt(d.払戻.単勝[0].払出, 10) : null,
-    sanrenpuku: d.払戻?.['3連複']?.[0] ? parseInt(d.払戻['3連複'][0].払出, 10) : null,
-    sanrentan: d.払戻?.['3連単']?.[0] ? parseInt(d.払戻['3連単'][0].払出, 10) : null,
+    payouts,
   };
 }
 
@@ -61,17 +100,17 @@ export default function TodaysPayouts({ races, getResultByVenueRound }: TodaysPa
     );
   }
 
+  // Aggregate stats
   let totalTansho = 0;
   let totalSanrenpuku = 0;
   let manbakenCount = 0;
 
   for (const { result } of racesWithResults) {
-    if (result.tansho) totalTansho += result.tansho;
-    if (result.sanrenpuku) {
-      totalSanrenpuku += result.sanrenpuku;
-      if (result.sanrenpuku >= 10000) manbakenCount++;
+    for (const p of result.payouts) {
+      if (p.label === '単勝') totalTansho += p.amount;
+      if (p.label === '3連複') totalSanrenpuku += p.amount;
+      if ((p.label === '3連複' || p.label === '3連単') && p.amount >= 10000) manbakenCount++;
     }
-    if (result.sanrentan && result.sanrentan >= 10000) manbakenCount++;
   }
 
   return (
@@ -87,8 +126,9 @@ export default function TodaysPayouts({ races, getResultByVenueRound }: TodaysPa
       {/* Race Cards Grid */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {racesWithResults.map(({ race, result }) => {
-          const isManbakenSP = (result.sanrenpuku ?? 0) >= 10000;
-          const isManbakenST = (result.sanrentan ?? 0) >= 10000;
+          const hasManba = result.payouts.some(p =>
+            (p.label === '3連複' || p.label === '3連単') && p.amount >= 10000
+          );
 
           return (
             <motion.div
@@ -96,7 +136,7 @@ export default function TodaysPayouts({ races, getResultByVenueRound }: TodaysPa
               className="p-3 rounded-xl border"
               style={{
                 backgroundColor: 'var(--bg-card)',
-                borderColor: (isManbakenSP || isManbakenST) ? '#ef444460' : 'var(--border)',
+                borderColor: hasManba ? '#ef444460' : 'var(--border)',
               }}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -124,40 +164,27 @@ export default function TodaysPayouts({ races, getResultByVenueRound }: TodaysPa
                 ))}
               </div>
 
-              {/* Payouts */}
-              <div className="space-y-1 text-xs">
-                {result.tansho != null && (
-                  <div className="flex justify-between">
-                    <span style={{ color: 'var(--text-secondary)' }}>単勝</span>
-                    <span className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
-                      {formatPayout(result.tansho)}
-                    </span>
-                  </div>
-                )}
-                {result.sanrenpuku != null && (
-                  <div className="flex justify-between">
-                    <span style={{ color: 'var(--text-secondary)' }}>3連複</span>
-                    <span
-                      className="font-mono font-bold"
-                      style={{ color: isManbakenSP ? '#ef4444' : 'var(--text-primary)' }}
-                    >
-                      {formatPayout(result.sanrenpuku)}
-                      {isManbakenSP && ' !'}
-                    </span>
-                  </div>
-                )}
-                {result.sanrentan != null && (
-                  <div className="flex justify-between">
-                    <span style={{ color: 'var(--text-secondary)' }}>3連単</span>
-                    <span
-                      className="font-mono font-bold"
-                      style={{ color: isManbakenST ? '#ef4444' : 'var(--text-primary)' }}
-                    >
-                      {formatPayout(result.sanrentan)}
-                      {isManbakenST && ' !'}
-                    </span>
-                  </div>
-                )}
+              {/* All Payouts */}
+              <div className="space-y-0.5 text-xs">
+                {result.payouts.map((p, i) => {
+                  const isManba = p.amount >= 10000;
+                  return (
+                    <div key={i} className="flex items-center justify-between">
+                      <span style={{ color: 'var(--text-secondary)' }}>{p.label}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                          {p.combination}
+                        </span>
+                        <span
+                          className="font-mono font-bold"
+                          style={{ color: isManba ? '#ef4444' : 'var(--text-primary)' }}
+                        >
+                          {formatPayout(p.amount)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </motion.div>
           );

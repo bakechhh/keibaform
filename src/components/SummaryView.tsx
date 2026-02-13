@@ -2,19 +2,21 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Race } from '../types';
 import { RaceResult } from '../types/raceResults';
+import { IchigekiScanResult } from '../hooks/useIchigekiScan';
 import CrossRaceComparison from './summary/CrossRaceComparison';
 import TodaysPayouts from './summary/TodaysPayouts';
 import RaceReview from './summary/RaceReview';
 
 interface SummaryViewProps {
   races: Race[];
+  ichigekiScanResults: IchigekiScanResult[];
   getResultByVenueRound: (venue: string, round: number) => RaceResult | undefined;
   onRaceSelect: (race: Race) => void;
 }
 
 type SummaryTab = 'comparison' | 'payouts' | 'review';
 
-export default function SummaryView({ races, getResultByVenueRound, onRaceSelect }: SummaryViewProps) {
+export default function SummaryView({ races, ichigekiScanResults, getResultByVenueRound, onRaceSelect }: SummaryViewProps) {
   const [tab, setTab] = useState<SummaryTab>('comparison');
 
   const tabs: { key: SummaryTab; label: string }[] = [
@@ -49,6 +51,7 @@ export default function SummaryView({ races, getResultByVenueRound, onRaceSelect
       {tab === 'comparison' && (
         <CrossRaceComparison
           races={races}
+          ichigekiScanResults={ichigekiScanResults}
           onRaceSelect={onRaceSelect}
         />
       )}
