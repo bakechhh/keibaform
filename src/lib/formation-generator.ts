@@ -485,7 +485,7 @@ function getKoboreumaCol2(horses: Horse[]): number[] {
 /**
  * 一撃v5（三連単）
  * 1着: 堅実col1 + 逆転col1 + 大穴col1 + AI各指標1位 + こぼれ馬（1着用）
- * 2着: 堅実col2 + 逆転col2 + 大穴col2 + こぼれ馬（2着用）
+ * 2着: 堅実col2 + 逆転col2 + 大穴col2 + AI各指標1位 + こぼれ馬（2着用）
  * 3着: 全頭（全流し）
  */
 function sanrentanIchigeki(
@@ -506,12 +506,12 @@ function sanrentanIchigeki(
   if (oanaPattern) col1Sources.push(...oanaPattern.col1);
   const col1 = Array.from(new Set([...col1Sources, ...indexTop1All, ...koboreumaCol1])).sort((a, b) => a - b);
 
-  // 2着候補: 3パターンのcol2 + こぼれ馬（2着用）
+  // 2着候補: 3パターンのcol2 + AI各指標1位 + こぼれ馬（2着用）
   const col2Sources: number[] = [];
   if (kenjitsuPattern) col2Sources.push(...kenjitsuPattern.col2);
   if (gyakutenPattern) col2Sources.push(...gyakutenPattern.col2);
   if (oanaPattern) col2Sources.push(...oanaPattern.col2);
-  const col2 = Array.from(new Set([...col2Sources, ...koboreumaCol2])).sort((a, b) => a - b);
+  const col2 = Array.from(new Set([...col2Sources, ...indexTop1All, ...koboreumaCol2])).sort((a, b) => a - b);
 
   // 3着候補: 全頭
   const col3 = allUma;
@@ -530,7 +530,7 @@ function sanrentanIchigeki(
 /**
  * 一撃v5（三連複）
  * 1列目: 堅実col1 + 逆転col1 + 大穴col1 + AI各指標1位 + こぼれ馬（1着用）
- * 2列目: 堅実col2 + 逆転col2 + 大穴col2 + こぼれ馬（2着用）
+ * 2列目: 堅実col2 + 逆転col2 + 大穴col2 + AI各指標1位 + こぼれ馬（2着用）
  * 3列目: 全頭（全流し）
  */
 function sanrenpukuIchigeki(
@@ -551,12 +551,12 @@ function sanrenpukuIchigeki(
   if (oanaPattern) col1Sources.push(...oanaPattern.col1);
   const col1 = Array.from(new Set([...col1Sources, ...indexTop1All, ...koboreumaCol1])).sort((a, b) => a - b);
 
-  // 2列目: 3パターンのcol2 + こぼれ馬（2着用）
+  // 2列目: 3パターンのcol2 + AI各指標1位 + こぼれ馬（2着用）
   const col2Sources: number[] = [];
   if (kenjitsuPattern) col2Sources.push(...kenjitsuPattern.col2);
   if (gyakutenPattern) col2Sources.push(...gyakutenPattern.col2);
   if (oanaPattern) col2Sources.push(...oanaPattern.col2);
-  const col2 = Array.from(new Set([...col2Sources, ...koboreumaCol2])).sort((a, b) => a - b);
+  const col2 = Array.from(new Set([...col2Sources, ...indexTop1All, ...koboreumaCol2])).sort((a, b) => a - b);
 
   // 3列目: 全頭
   const col3 = allUma;
