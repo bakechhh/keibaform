@@ -147,12 +147,12 @@ export default function HorseCard({ horse, index, totalHorses = 18, raceSurface,
               horse.deokureRate >= 0.15 ? 'bg-orange-500/20 text-orange-400' :
               'bg-yellow-500/20 text-yellow-400'
             }`}>
-              出遅{(horse.deokureRate * 100).toFixed(0)}%
+              出遅{(horse.deokureRate * 100).toFixed(0)}% ({horse.deokureCount}/{horse.analysisPastRaces.length})
             </span>
           )}
           {horse.lastRaceFuri && (
             <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-rose-500/20 text-rose-400">
-              前走不利
+              前走不利: {horse.lastRaceFuri}
             </span>
           )}
           {horse.surfaceExp && !horse.surfaceExp.has_today_surface_exp && (
