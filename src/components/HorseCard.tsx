@@ -155,9 +155,12 @@ export default function HorseCard({ horse, index, totalHorses = 18, raceSurface,
               前走不利: {horse.lastRaceFuri}
             </span>
           )}
-          {horse.surfaceExp && !horse.surfaceExp.has_today_surface_exp && (
+          {horse.surfaceExp && raceSurface && (
+            (raceSurface === '芝' && horse.surfaceExp.turf_count === 0) ||
+            (raceSurface === 'ダ' && horse.surfaceExp.dirt_count === 0)
+          ) && (
             <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-violet-500/20 text-violet-400">
-              {raceSurface === '芝' ? '芝経験無し' : raceSurface === 'ダ' ? 'ダート経験無し' : '初馬場'}
+              {raceSurface === '芝' ? '芝経験無し' : 'ダート経験無し'}
             </span>
           )}
         </div>

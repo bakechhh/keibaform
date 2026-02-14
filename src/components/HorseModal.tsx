@@ -578,11 +578,20 @@ export default function HorseModal({ horse, isOpen, onClose, totalHorses = 18, r
                           <div className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>
                             {raceSurface === '芝' ? '芝経験' : raceSurface === 'ダ' ? 'ダート経験' : '馬場経験'}
                           </div>
-                          <div className={`font-bold text-lg ${horse.surfaceExp.has_today_surface_exp ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {horse.surfaceExp.has_today_surface_exp
-                              ? '経験あり'
-                              : raceSurface === '芝' ? '芝経験無し' : raceSurface === 'ダ' ? 'ダート経験無し' : '初挑戦'}
-                          </div>
+                          {(() => {
+                            const hasExp = raceSurface === '芝'
+                              ? horse.surfaceExp.turf_count > 0
+                              : raceSurface === 'ダ'
+                                ? horse.surfaceExp.dirt_count > 0
+                                : horse.surfaceExp.has_today_surface_exp;
+                            return (
+                              <div className={`font-bold text-lg ${hasExp ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {hasExp
+                                  ? '経験あり'
+                                  : raceSurface === '芝' ? '芝経験無し' : raceSurface === 'ダ' ? 'ダート経験無し' : '初挑戦'}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </>
                     )}
