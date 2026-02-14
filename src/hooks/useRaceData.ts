@@ -12,6 +12,8 @@ import {
   RawJockey,
   RawTrainer,
   RaceResultDisplay,
+  RawAnalysisData,
+  AnalysisHorse,
 } from '../types';
 import {
   getHorseColor,
@@ -112,8 +114,16 @@ function transformPastRaces(rawPastRaces?: RawPastRace[]): PastRace[] {
 // 生データを表示用に変換
 function transformRaceData(
   rawRace: RawRaceData,
-  oddsData: RawOddsEntry[] | null
+  oddsData: RawOddsEntry[] | null,
+  analysisData?: RawAnalysisData | null
 ): Race {
+  // 分析データから馬番→分析馬データのマップを作成
+  const analysisHorseMap = new Map<number, AnalysisHorse>();
+  if (analysisData?.horses) {
+    for (const ah of analysisData.horses) {
+      analysisHorseMap.set(ah.umaban, ah);
+    }
+  }
   // オッズデータから単勝・複勝オッズを取得
   const tanshoOddsMap = new Map<number, number>();
   const fukushoOddsMap = new Map<number, { min: number; max: number }>();
@@ -166,6 +176,9 @@ function transformRaceData(
 
     const trainerData: RawTrainer | null = h.trainer ?? null;
 
+    // 分析データをマージ
+    const analysisHorse = analysisHorseMap.get(h.horse_number);
+
     return {
       id: `${rawRace.race_id}-${h.horse_number}`,
       name: h.horse_name,
@@ -194,6 +207,13 @@ function transformRaceData(
       placeRate: Math.round(h.predictions.place_rate * 100),
       battleMining: h.battle_mining ?? 0,
       pastRaces: transformPastRaces(h.past_races),
+      // netkeiba分析データ
+      runningType: analysisHorse?.running_type ?? null,
+      deokureCount: analysisHorse?.deokure_count ?? 0,
+      deokureRate: analysisHorse?.deokure_rate ?? 0,
+      lastRaceFuri: analysisHorse?.last_race_furi ?? null,
+      surfaceExp: analysisHorse?.surface_exp ?? null,
+      analysisPastRaces: analysisHorse?.past_races ?? [],
     };
   });
 
@@ -445,12 +465,13 @@ export function useRaceData() {
       setLoading(true);
       setError(null);
 
-      // レースデータ、オッズデータ、馬場状態、レース結果を並列取得
-      const [raceResult, oddsResult, trackResult, resultsResult] = await Promise.all([
+      // レースデータ、オッズデータ、馬場状態、レース結果、分析データを並列取得
+      const [raceResult, oddsResult, trackResult, resultsResult, analysisResult] = await Promise.all([
         supabase.from('race_data_json').select('race_id, data'),
         supabase.from('race_odds_json').select('race_id, data'),
         supabase.from('track_conditions').select('race_id, track_condition'),
         supabase.from('race_results').select('race_id, data'),
+        supabase.from('race_horse_analysis').select('race_id, data'),
       ]);
 
       if (raceResult.error) throw raceResult.error;
@@ -463,6 +484,9 @@ export function useRaceData() {
       }
       if (resultsResult.error) {
         console.warn('レース結果データ取得エラー:', resultsResult.error);
+      }
+      if (analysisResult.error) {
+        console.warn('分析データ取得エラー:', analysisResult.error);
       }
 
       // オッズをマップに変換
@@ -490,6 +514,15 @@ export function useRaceData() {
         raceResultsMap.set(row.race_id, resultData);
       }
 
+      // 分析データをマップに変換
+      const analysisMap = new Map<string, RawAnalysisData>();
+      for (const row of analysisResult.data || []) {
+        const data = typeof row.data === 'string'
+          ? JSON.parse(row.data) as RawAnalysisData
+          : row.data as RawAnalysisData;
+        analysisMap.set(row.race_id, data);
+      }
+
       // レースデータを変換
       const transformedRaces: Race[] = [];
       let raceIndex = 0;
@@ -498,8 +531,9 @@ export function useRaceData() {
         const odds = oddsMap.get(row.race_id) || null;
         const trackCondition = trackConditionMap.get(row.race_id);
         const raceResultData = raceResultsMap.get(row.race_id);
+        const analysisData = analysisMap.get(row.race_id) || null;
 
-        const race = transformRaceData(rawRace, odds);
+        const race = transformRaceData(rawRace, odds, analysisData);
         // race_idが重複する可能性があるため、インデックスを追加してユニークにする
         race.id = `${row.race_id}-${raceIndex}`;
         // オッズ検索用にデータベースカラムのrace_idを使用（JSON内のrace_idとは異なる場合がある）

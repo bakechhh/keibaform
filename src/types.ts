@@ -161,6 +161,48 @@ export interface TrackCondition {
   track_condition: string;
 }
 
+// ===== netkeiba分析データの型 =====
+
+export interface AnalysisPastRace {
+  order: number | null;
+  date: string;
+  venue: string;
+  race_name: string;
+  course: string;
+  surface: string | null;
+  time: string;
+  corner: string;
+  furi_comment: string;
+}
+
+export interface SurfaceExp {
+  turf_count: number;
+  dirt_count: number;
+  has_today_surface_exp: boolean;
+}
+
+export interface AnalysisHorse {
+  umaban: number;
+  name: string;
+  horse_id: string;
+  running_type: string | null;
+  past_races: AnalysisPastRace[];
+  total_races: number;
+  deokure_count: number;
+  deokure_rate: number;
+  last_race_furi: string | null;
+  surface_exp: SurfaceExp;
+}
+
+export interface RawAnalysisData {
+  venue: string;
+  race_no: number;
+  race_id: string;
+  date: string;
+  race_surface: string | null;
+  horses: AnalysisHorse[];
+}
+
 // ===== UI表示用ステータス =====
 
 export interface HorseStats {
@@ -262,6 +304,14 @@ export interface Horse {
 
   // 過去レース（あれば）
   pastRaces: PastRace[];
+
+  // netkeiba分析データ
+  runningType: string | null;
+  deokureCount: number;
+  deokureRate: number;
+  lastRaceFuri: string | null;
+  surfaceExp: SurfaceExp | null;
+  analysisPastRaces: AnalysisPastRace[];
 }
 
 export interface Race {

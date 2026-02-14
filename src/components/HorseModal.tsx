@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trophy, User, Zap, Target, Brain, TrendingUp, MessageSquare } from 'lucide-react';
+import { X, Trophy, User, Zap, Target, Brain, TrendingUp, MessageSquare, AlertTriangle, Clock } from 'lucide-react';
 import { Horse } from '../types';
 import StatsRadarChart from './charts/StatsRadarChart';
 import PerformanceChart from './charts/PerformanceChart';
@@ -545,6 +545,192 @@ export default function HorseModal({ horse, isOpen, onClose, totalHorses = 18, r
                   </div>
                 </motion.div>
               )}
+
+              {/* 走行型・馬場経験 セクション */}
+              {(horse.runningType || horse.surfaceExp) && (
+                <motion.div
+                  className="p-4 rounded-2xl"
+                  style={{ backgroundColor: 'var(--bg-secondary)' }}
+                  variants={itemVariants}
+                >
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                    <Zap className="w-5 h-5 text-sky-400" />
+                    走行型・馬場経験
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {horse.runningType && (
+                      <div className="p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)' }}>
+                        <div className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>走行型</div>
+                        <div className="font-bold text-lg text-sky-400">{horse.runningType}</div>
+                      </div>
+                    )}
+                    {horse.surfaceExp && (
+                      <>
+                        <div className="p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)' }}>
+                          <div className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>芝経験</div>
+                          <div className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{horse.surfaceExp.turf_count}走</div>
+                        </div>
+                        <div className="p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)' }}>
+                          <div className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>ダート経験</div>
+                          <div className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{horse.surfaceExp.dirt_count}走</div>
+                        </div>
+                        <div className="p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)' }}>
+                          <div className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>
+                            {raceSurface === '芝' ? '芝経験' : raceSurface === 'ダ' ? 'ダート経験' : '馬場経験'}
+                          </div>
+                          <div className={`font-bold text-lg ${horse.surfaceExp.has_today_surface_exp ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {horse.surfaceExp.has_today_surface_exp
+                              ? '経験あり'
+                              : raceSurface === '芝' ? '芝経験無し' : raceSurface === 'ダ' ? 'ダート経験無し' : '初挑戦'}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* 出遅れ情報 セクション */}
+              <motion.div
+                className="p-4 rounded-2xl"
+                style={{ backgroundColor: 'var(--bg-secondary)' }}
+                variants={itemVariants}
+              >
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <Clock className="w-5 h-5 text-orange-400" />
+                  出遅れ情報
+                </h3>
+                {/* サマリーカード */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)' }}>
+                    <div className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>出遅れ率</div>
+                    <div className={`font-bold text-2xl ${
+                      horse.deokureRate >= 0.3 ? 'text-red-400' :
+                      horse.deokureRate >= 0.15 ? 'text-orange-400' :
+                      horse.deokureRate > 0 ? 'text-yellow-400' :
+                      'text-emerald-400'
+                    }`}>
+                      {(horse.deokureRate * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)' }}>
+                    <div className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>出遅れ回数</div>
+                    <div className="font-bold text-2xl" style={{ color: 'var(--text-primary)' }}>
+                      {horse.deokureCount}回
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-card)' }}>
+                    <div className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>総レース数</div>
+                    <div className="font-bold text-2xl" style={{ color: 'var(--text-primary)' }}>
+                      {horse.analysisPastRaces.length > 0 ? horse.analysisPastRaces.length : '-'}
+                    </div>
+                  </div>
+                </div>
+                {/* 出遅れ該当レース一覧 */}
+                {horse.analysisPastRaces.length > 0 && (() => {
+                  const deokureRaces = horse.analysisPastRaces.filter(r => r.furi_comment.includes('出遅'));
+                  if (deokureRaces.length === 0) {
+                    return (
+                      <div className="text-sm text-center py-3 rounded-xl" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-secondary)' }}>
+                        出遅れ履歴なし
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold mb-2" style={{ color: 'var(--text-secondary)' }}>出遅れ該当レース</div>
+                      {deokureRaces.map((race, i) => (
+                        <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg-card)' }}>
+                          <div className="flex-shrink-0 w-20 text-xs" style={{ color: 'var(--text-secondary)' }}>{race.date}</div>
+                          <div className="flex-shrink-0 w-10 text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{race.venue}</div>
+                          <div className="flex-1 truncate text-xs" style={{ color: 'var(--text-primary)' }}>{race.race_name}</div>
+                          <div className="flex-shrink-0 text-xs" style={{ color: 'var(--text-secondary)' }}>{race.course}</div>
+                          <div className="flex-shrink-0 w-8 text-center font-bold" style={{ color: race.order && race.order <= 3 ? '#22c55e' : 'var(--text-primary)' }}>
+                            {race.order ?? '-'}着
+                          </div>
+                          <div className="flex-shrink-0">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-bold">出遅</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+                {horse.analysisPastRaces.length === 0 && (
+                  <div className="text-sm text-center py-3 rounded-xl" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-secondary)' }}>
+                    分析データなし
+                  </div>
+                )}
+              </motion.div>
+
+              {/* 不利情報 セクション */}
+              <motion.div
+                className="p-4 rounded-2xl"
+                style={{ backgroundColor: 'var(--bg-secondary)' }}
+                variants={itemVariants}
+              >
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <AlertTriangle className="w-5 h-5 text-rose-400" />
+                  不利情報
+                </h3>
+                {/* 直近不利サマリー */}
+                <div className="mb-4 p-3 rounded-xl" style={{ backgroundColor: 'var(--bg-card)' }}>
+                  <div className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>前走不利</div>
+                  {horse.lastRaceFuri ? (
+                    <div className="font-bold text-rose-400">{horse.lastRaceFuri}</div>
+                  ) : (
+                    <div className="font-bold text-emerald-400">なし</div>
+                  )}
+                </div>
+                {/* 不利履歴一覧 */}
+                {horse.analysisPastRaces.length > 0 && (() => {
+                  const furiRaces = horse.analysisPastRaces.filter(r => r.furi_comment && r.furi_comment.length > 0);
+                  if (furiRaces.length === 0) {
+                    return (
+                      <div className="text-sm text-center py-3 rounded-xl" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-secondary)' }}>
+                        不利履歴なし
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold mb-2" style={{ color: 'var(--text-secondary)' }}>
+                        不利該当レース ({furiRaces.length}/{horse.analysisPastRaces.length}走)
+                      </div>
+                      {furiRaces.map((race, i) => (
+                        <div key={i} className="p-2.5 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg-card)' }}>
+                          <div className="flex items-center gap-3">
+                            <div className="flex-shrink-0 w-20 text-xs" style={{ color: 'var(--text-secondary)' }}>{race.date}</div>
+                            <div className="flex-shrink-0 w-10 text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{race.venue}</div>
+                            <div className="flex-1 truncate text-xs" style={{ color: 'var(--text-primary)' }}>{race.race_name}</div>
+                            <div className="flex-shrink-0 text-xs" style={{ color: 'var(--text-secondary)' }}>{race.course}</div>
+                            <div className="flex-shrink-0 w-8 text-center font-bold" style={{ color: race.order && race.order <= 3 ? '#22c55e' : 'var(--text-primary)' }}>
+                              {race.order ?? '-'}着
+                            </div>
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {race.furi_comment.split('、').map((comment, j) => (
+                              <span key={j} className="text-[11px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 font-bold">
+                                {comment}
+                              </span>
+                            ))}
+                          </div>
+                          {race.corner && (
+                            <div className="mt-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                              通過順: {race.corner}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+                {horse.analysisPastRaces.length === 0 && (
+                  <div className="text-sm text-center py-3 rounded-xl" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-secondary)' }}>
+                    分析データなし
+                  </div>
+                )}
+              </motion.div>
 
               {/* Distance Aptitude Matrix */}
               {horse.pastRaces.length > 0 && (

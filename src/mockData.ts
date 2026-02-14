@@ -117,6 +117,13 @@ const createMockHorse = (
         position3f: 0.2,
       },
     ],
+    // netkeiba分析データ（モックではデフォルト値）
+    runningType: null,
+    deokureCount: 0,
+    deokureRate: 0,
+    lastRaceFuri: null,
+    surfaceExp: null,
+    analysisPastRaces: [],
   };
 };
 

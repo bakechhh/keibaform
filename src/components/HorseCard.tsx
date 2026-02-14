@@ -11,6 +11,7 @@ interface HorseCardProps {
   horse: Horse;
   index: number;
   totalHorses?: number;
+  raceSurface?: string;
   onClick: () => void;
 }
 
@@ -36,7 +37,7 @@ const statusLabels: Record<string, string> = {
   delete: '✕消し',
 };
 
-export default function HorseCard({ horse, index, totalHorses = 18, onClick }: HorseCardProps) {
+export default function HorseCard({ horse, index, totalHorses = 18, raceSurface, onClick }: HorseCardProps) {
   const bracketColor = getBracketColor(horse.number, totalHorses);
   const { getMark, getMemo, setMark } = useHorseMarksContext();
 
@@ -131,6 +132,36 @@ export default function HorseCard({ horse, index, totalHorses = 18, onClick }: H
           compact
         />
       </div>
+
+      {/* 走行型・出遅れ・不利・馬場経験 バッジ行 */}
+      {(horse.runningType || horse.deokureRate > 0 || horse.lastRaceFuri || horse.surfaceExp) && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {horse.runningType && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-sky-500/20 text-sky-400">
+              {horse.runningType}
+            </span>
+          )}
+          {horse.deokureRate > 0 && (
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+              horse.deokureRate >= 0.3 ? 'bg-red-500/20 text-red-400' :
+              horse.deokureRate >= 0.15 ? 'bg-orange-500/20 text-orange-400' :
+              'bg-yellow-500/20 text-yellow-400'
+            }`}>
+              出遅{(horse.deokureRate * 100).toFixed(0)}%
+            </span>
+          )}
+          {horse.lastRaceFuri && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-rose-500/20 text-rose-400">
+              前走不利
+            </span>
+          )}
+          {horse.surfaceExp && !horse.surfaceExp.has_today_surface_exp && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-violet-500/20 text-violet-400">
+              {raceSurface === '芝' ? '芝経験無し' : raceSurface === 'ダ' ? 'ダート経験無し' : '初馬場'}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Popularity & Odds Row */}
       <div className="flex items-center gap-2 mb-3 p-2 rounded-xl" style={{ backgroundColor: 'var(--bg-secondary)' }}>

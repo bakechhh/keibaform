@@ -1056,6 +1056,7 @@ export default function App() {
                           horse={horse}
                           index={index}
                           totalHorses={selectedRace.horses.length}
+                          raceSurface={selectedRace.surface}
                           onClick={() => handleHorseClick(horse)}
                         />
                         {comparisonMode && horse1ForComparison?.id === horse.id && (
