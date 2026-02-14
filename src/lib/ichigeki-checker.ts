@@ -48,16 +48,13 @@ export interface IchigekiQuickResult {
 export function quickCheckIchigeki(race: Race): IchigekiQuickResult {
   const failReasons: string[] = [];
 
-  // ① 1番人気オッズ >= 3.0（Horse.tanshoOddsから取得）
+  // ① 1番人気オッズ >= 2.5（Horse.tanshoOddsから取得）
   const favorite = race.horses.reduce(
     (min, h) => (h.tanshoOdds > 0 && h.tanshoOdds < min.tanshoOdds) ? h : min,
     race.horses[0],
   );
   const favoriteOdds = favorite?.tanshoOdds ?? 0;
-  if (favoriteOdds < 3.0) failReasons.push(`1人気${favoriteOdds.toFixed(1)}倍`);
-
-  // ⑥ 堅実除外
-  if (race.evaluation.type === 'SOLID') failReasons.push('堅実');
+  if (favoriteOdds < 2.5) failReasons.push(`1人気${favoriteOdds.toFixed(1)}倍`);
 
   return {
     candidate: failReasons.length === 0,
@@ -79,20 +76,20 @@ export function checkIchigekiEligibility(
   const spOddsMap = buildSanrenpukuOddsMap(odds);
   const stOddsMap = buildSanrentanOddsMap(odds);
 
-  // ① 1番人気の単勝オッズ >= 3.0
+  // ① 1番人気の単勝オッズ >= 2.5
   const tanshoSorted = odds?.tansho
     ? [...odds.tansho].sort((a, b) => a.odds - b.odds)
     : [];
   const favoriteOdds = tanshoSorted.length > 0 ? tanshoSorted[0].odds : 0;
   const cond1: IchigekiCondition = {
     label: '1番人気オッズ',
-    description: '1番人気の単勝オッズが3.0倍以上',
-    passed: favoriteOdds >= 3.0,
+    description: '1番人気の単勝オッズが2.5倍以上',
+    passed: favoriteOdds >= 2.5,
     value: favoriteOdds > 0 ? `${favoriteOdds.toFixed(1)}倍` : '不明',
-    threshold: '>= 3.0倍',
+    threshold: '>= 2.5倍',
   };
 
-  // ② 三連複の合成オッズ平均 <= 5.0（一撃以外のパターン）
+  // ② 三連複の合成オッズ平均 <= 6.0（一撃以外のパターン）
   const nonIchigekiSp = formationResult.sanrenpuku.filter(p => !isIchigekiPattern(p));
   const spSynOddsArr = nonIchigekiSp
     .map(p => calcFormationSyntheticOdds(p, '三連複', spOddsMap, stOddsMap))
@@ -102,13 +99,13 @@ export function checkIchigekiEligibility(
     : null;
   const cond2: IchigekiCondition = {
     label: '三連複合成オッズ平均',
-    description: '一撃以外の三連複パターンの合成オッズ平均が5.0以下',
-    passed: avgSpSyn !== null && avgSpSyn <= 5.0,
+    description: '一撃以外の三連複パターンの合成オッズ平均が6.0以下',
+    passed: avgSpSyn !== null && avgSpSyn <= 6.0,
     value: avgSpSyn !== null ? `${avgSpSyn.toFixed(2)}倍` : '算出不可',
-    threshold: '<= 5.0',
+    threshold: '<= 6.0',
   };
 
-  // ③ 三連単の合成オッズ平均 >= 10.0 かつ <= 25.0（一撃以外のパターン）
+  // ③ 三連単の合成オッズ平均 >= 8.0 かつ <= 30.0（一撃以外のパターン）
   const nonIchigekiSt = formationResult.sanrentan.filter(p => !isIchigekiPattern(p));
   const stSynOddsArr = nonIchigekiSt
     .map(p => calcFormationSyntheticOdds(p, '三連単', spOddsMap, stOddsMap))
@@ -118,10 +115,10 @@ export function checkIchigekiEligibility(
     : null;
   const cond3: IchigekiCondition = {
     label: '三連単合成オッズ平均',
-    description: '一撃以外の三連単パターンの合成オッズ平均が10.0〜25.0',
-    passed: avgStSyn !== null && avgStSyn >= 10.0 && avgStSyn <= 25.0,
+    description: '一撃以外の三連単パターンの合成オッズ平均が8.0〜30.0',
+    passed: avgStSyn !== null && avgStSyn >= 8.0 && avgStSyn <= 30.0,
     value: avgStSyn !== null ? `${avgStSyn.toFixed(2)}倍` : '算出不可',
-    threshold: '10.0 〜 25.0',
+    threshold: '8.0 〜 30.0',
   };
 
   // ④ 新馬レース除外
@@ -144,15 +141,15 @@ export function checkIchigekiEligibility(
     threshold: '>= 12頭',
   };
 
-  // ⑥ 堅実レース除外
-  const isSolid = race.evaluation.type === 'SOLID';
-  const cond6: IchigekiCondition = {
-    label: '堅実レース除外',
-    description: '堅実レースではないこと',
-    passed: !isSolid,
-    value: isSolid ? '堅実' : race.evaluation.label,
-    threshold: '堅実以外',
-  };
+  // ⑥ 堅実レース除外 - 撤廃
+  // const isSolid = race.evaluation.type === 'SOLID';
+  // const cond6: IchigekiCondition = {
+  //   label: '堅実レース除外',
+  //   description: '堅実レースではないこと',
+  //   passed: !isSolid,
+  //   value: isSolid ? '堅実' : race.evaluation.label,
+  //   threshold: '堅実以外',
+  // };
 
   // 一撃パターン自体の合成オッズ
   const ichigekiSpPattern = formationResult.sanrenpuku.find(p => isIchigekiPattern(p));
@@ -179,10 +176,10 @@ export function checkIchigekiEligibility(
     threshold: `複<${ICHIGEKI_SP_MAX} 単<${ICHIGEKI_ST_MAX}`,
   };
 
-  const conditions = [cond1, cond2, cond3, cond4, cond5, cond6, cond7];
+  const conditions = [cond1, cond2, cond3, cond4, cond5, cond7];
 
-  // コア条件: ①②③⑥⑦（④⑤はソフト条件→弱マーカー）
-  const coreConditions = [cond1, cond2, cond3, cond6, cond7];
+  // コア条件: ①②③⑦（④⑤はソフト条件→弱マーカー、⑥堅実除外は撤廃）
+  const coreConditions = [cond1, cond2, cond3, cond7];
   const coreEligible = coreConditions.every(c => c.passed);
 
   // ④⑤は弱マーカー（買えるが信頼度低い）
@@ -196,8 +193,8 @@ export function checkIchigekiEligibility(
   if (coreEligible) {
     level = 'eligible';
   } else if (
-    // コア条件①②③⑥は合格だが⑦だけ不合格 → 準勝負の可能性
-    [cond1, cond2, cond3, cond6].every(c => c.passed)
+    // コア条件①②③は合格だが⑦だけ不合格 → 準勝負の可能性
+    [cond1, cond2, cond3].every(c => c.passed)
     && oddsOverAny
   ) {
     const spOk = ichigekiSpSynOdds === null || ichigekiSpSynOdds < ICHIGEKI_SP_SEMI;

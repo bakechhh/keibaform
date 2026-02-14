@@ -410,25 +410,10 @@ function sanrentanHoken(sh: ScoredHorse[]): FormationPattern | null {
 // ===== 一撃パターン =====
 
 /**
- * 一撃用: AI単勝/連対1-2位の馬番取得
+ * 一撃v5用: AI各指標1位の馬番取得（8指標）
+ * AI単勝率/AI連対率/AI複勝率/最終Sc/Mining/R評価/ZI偏差/基礎スコア
  */
-function getAiTop(horses: Horse[]): number[] {
-  const result = new Set<number>();
-  for (const h of horses) {
-    const wr = h.predictions?.win_rate_rank ?? 99;
-    const pr = h.predictions?.place_rate_rank ?? 99;
-    if (wr <= 2 || pr <= 2) {
-      result.add(h.number);
-    }
-  }
-  return Array.from(result).sort((a, b) => a - b);
-}
-
-/**
- * 一撃用: 各指標1位の馬番取得
- * AI単勝/AI連対/AI複勝/最終Sc/Mining/R評価/前走ZI/総合力 のいずれかで1位
- */
-function getIndexTop1(horses: Horse[]): number[] {
+function getIndexTop1All(horses: Horse[]): number[] {
   const result = new Set<number>();
   for (const h of horses) {
     if (h.predictions.win_rate_rank === 1) result.add(h.number);
@@ -438,117 +423,150 @@ function getIndexTop1(horses: Horse[]): number[] {
     if (h.miningRank === 1) result.add(h.number);
     if (h.raceEvalRank === 1) result.add(h.number);
     if (h.ziRank === 1) result.add(h.number);
-    if (h.powerRank === 1) result.add(h.number);
+    if (h.baseRank === 1) result.add(h.number);
   }
   return Array.from(result).sort((a, b) => a - b);
 }
 
 /**
- * 一撃用: 2着昇格判定
- * 既存逆転の3着候補から以下のOR条件で2着に昇格:
- *   ① 効率S以上(7倍↑) & (AI予測5位以内 or FS48以上)
- *   ② score_rankingにいる(modesCount>=2 & score>=4)
- *   ③ 紐以上(status≠delete) & オッズ15倍以上
+ * 一撃v5用: こぼれ馬（1着用）
+ * 妙味(value) + 効率A（4〜6倍）
  */
-function getIchigekiPromoted(
-  col3Umabans: number[],
-  horses: Horse[],
-  sh: ScoredHorse[],
-): number[] {
-  const promoted = new Set<number>();
-  const horseMap: Record<number, Horse> = {};
-  for (const h of horses) horseMap[h.number] = h;
-
-  for (const uma of col3Umabans) {
-    const h = horseMap[uma];
-    const s = sh.find(x => x.umaban === uma);
-    if (!h || !s) continue;
-
+function getKoboreumaCol1(horses: Horse[]): number[] {
+  const result: number[] = [];
+  for (const h of horses) {
+    const status = h.analysis.status;
+    const effRank = h.efficiency.rank;
     const odds = h.tanshoOdds ?? 0;
-    const fs = h.indices?.final_score ?? 0;
-    const aiWinRank = h.predictions?.win_rate_rank ?? 99;
-    const aiPlaceRank = h.predictions?.place_rate_rank ?? 99;
-    const aiShowRank = h.predictions?.show_rate_rank ?? 99;
-    const ai5 = aiWinRank <= 5 || aiPlaceRank <= 5 || aiShowRank <= 5;
 
-    // ① 効率S以上 & (AI5位以内 or FS48以上)
-    if (odds >= 7.0 && (ai5 || fs >= 48)) {
-      promoted.add(uma);
-    }
-    // ② score_ranking相当(3モードで複数回評価)
-    if (s.modesCount >= 2 && s.score >= 4) {
-      promoted.add(uma);
-    }
-    // ③ 紐以上(status≠delete) かつ オッズ15倍以上
-    if (odds >= 15.0 && s.rank !== '-') {
-      promoted.add(uma);
+    // 妙味 + 効率A（4〜6倍）
+    if (status === 'value' && effRank === 'A' && odds >= 4.0 && odds <= 6.0) {
+      result.push(h.number);
     }
   }
-
-  return Array.from(promoted).sort((a, b) => a - b);
+  return result.sort((a, b) => a - b);
 }
 
 /**
- * 一撃（三連単）
- * 1着: 既存逆転1着 + AI単勝/連対1-2位 + 各指標1位
- * 2着: 既存逆転2着 + AI単勝/連対1-2位 + 昇格組
- * 3着: 総流し
+ * 一撃v5用: こぼれ馬（2着用）
+ * ① 妙味(value) + 効率A（4〜6倍）
+ * ② 妙味(value) + 効率B+（3〜4倍）
+ * ③ 紐(safe) + 効率B（2.5〜3倍）
+ * ④ 有力軸(axis_strong) + 効率B（2.5〜3倍）
+ */
+function getKoboreumaCol2(horses: Horse[]): number[] {
+  const result: number[] = [];
+  for (const h of horses) {
+    const status = h.analysis.status;
+    const effRank = h.efficiency.rank;
+    const odds = h.tanshoOdds ?? 0;
+
+    // ① 妙味 + 効率A（4〜6倍）
+    if (status === 'value' && effRank === 'A' && odds >= 4.0 && odds <= 6.0) {
+      result.push(h.number);
+    }
+    // ② 妙味 + 効率B+（3〜4倍）
+    else if (status === 'value' && effRank === 'B+' && odds >= 3.0 && odds <= 4.0) {
+      result.push(h.number);
+    }
+    // ③ 紐 + 効率B（2.5〜3倍）
+    else if (status === 'safe' && effRank === 'B' && odds >= 2.5 && odds <= 3.0) {
+      result.push(h.number);
+    }
+    // ④ 有力軸 + 効率B（2.5〜3倍）
+    else if (status === 'axis_strong' && effRank === 'B' && odds >= 2.5 && odds <= 3.0) {
+      result.push(h.number);
+    }
+  }
+  return result.sort((a, b) => a - b);
+}
+
+
+/**
+ * 一撃v5（三連単）
+ * 1着: 堅実col1 + 逆転col1 + 大穴col1 + AI各指標1位 + こぼれ馬（1着用）
+ * 2着: 堅実col2 + 逆転col2 + 大穴col2 + こぼれ馬（2着用）
+ * 3着: 全頭（全流し）
  */
 function sanrentanIchigeki(
-  sh: ScoredHorse[],
   horses: Horse[],
+  kenjitsuPattern: FormationPattern | null,
   gyakutenPattern: FormationPattern | null,
+  oanaPattern: FormationPattern | null,
 ): FormationPattern | null {
-  if (!gyakutenPattern) return null;
-
-  const aiTop = getAiTop(horses);
-  const indexTop1 = getIndexTop1(horses);
   const allUma = horses.map(h => h.number).sort((a, b) => a - b);
+  const indexTop1All = getIndexTop1All(horses);
+  const koboreumaCol1 = getKoboreumaCol1(horses);
+  const koboreumaCol2 = getKoboreumaCol2(horses);
 
-  const col1 = Array.from(new Set([...gyakutenPattern.col1, ...aiTop, ...indexTop1])).sort((a, b) => a - b);
-  const promoted = getIchigekiPromoted(gyakutenPattern.col3, horses, sh);
-  const col2 = Array.from(new Set([...gyakutenPattern.col2, ...aiTop, ...promoted])).sort((a, b) => a - b);
+  // 1着候補: 3パターンのcol1 + AI各指標1位 + こぼれ馬（1着用）
+  const col1Sources: number[] = [];
+  if (kenjitsuPattern) col1Sources.push(...kenjitsuPattern.col1);
+  if (gyakutenPattern) col1Sources.push(...gyakutenPattern.col1);
+  if (oanaPattern) col1Sources.push(...oanaPattern.col1);
+  const col1 = Array.from(new Set([...col1Sources, ...indexTop1All, ...koboreumaCol1])).sort((a, b) => a - b);
+
+  // 2着候補: 3パターンのcol2 + こぼれ馬（2着用）
+  const col2Sources: number[] = [];
+  if (kenjitsuPattern) col2Sources.push(...kenjitsuPattern.col2);
+  if (gyakutenPattern) col2Sources.push(...gyakutenPattern.col2);
+  if (oanaPattern) col2Sources.push(...oanaPattern.col2);
+  const col2 = Array.from(new Set([...col2Sources, ...koboreumaCol2])).sort((a, b) => a - b);
+
+  // 3着候補: 全頭
   const col3 = allUma;
 
-  if (col1.length === 0 || col2.length < 2) return null;
+  if (col1.length === 0 || col2.length === 0) return null;
 
   const count = countSanrentan(col1, col2, col3);
   return {
     name: '一撃（三連単）', emoji: '⚡',
-    description: '逆転強化+各指標1位+3着総流し',
+    description: '3パターン合体+各指標1位+こぼれ補完+3着全流し',
     col1, col2, col3,
     count, amount: 0,
   };
 }
 
 /**
- * 一撃（三連複）
- * 1列目: 既存逆転1着 + AI単勝/連対1-2位 + 各指標1位
- * 2列目: 既存逆転2着 + AI単勝/連対1-2位 + 昇格組
- * 3列目: 総流し
+ * 一撃v5（三連複）
+ * 1列目: 堅実col1 + 逆転col1 + 大穴col1 + AI各指標1位 + こぼれ馬（1着用）
+ * 2列目: 堅実col2 + 逆転col2 + 大穴col2 + こぼれ馬（2着用）
+ * 3列目: 全頭（全流し）
  */
 function sanrenpukuIchigeki(
-  sh: ScoredHorse[],
   horses: Horse[],
+  kenjitsuPattern: FormationPattern | null,
   gyakutenPattern: FormationPattern | null,
+  oanaPattern: FormationPattern | null,
 ): FormationPattern | null {
-  if (!gyakutenPattern) return null;
-
-  const aiTop = getAiTop(horses);
-  const indexTop1 = getIndexTop1(horses);
   const allUma = horses.map(h => h.number).sort((a, b) => a - b);
+  const indexTop1All = getIndexTop1All(horses);
+  const koboreumaCol1 = getKoboreumaCol1(horses);
+  const koboreumaCol2 = getKoboreumaCol2(horses);
 
-  const col1 = Array.from(new Set([...gyakutenPattern.col1, ...aiTop, ...indexTop1])).sort((a, b) => a - b);
-  const promoted = getIchigekiPromoted(gyakutenPattern.col3, horses, sh);
-  const col2 = Array.from(new Set([...gyakutenPattern.col2, ...aiTop, ...promoted])).sort((a, b) => a - b);
+  // 1列目: 3パターンのcol1 + AI各指標1位 + こぼれ馬（1着用）
+  const col1Sources: number[] = [];
+  if (kenjitsuPattern) col1Sources.push(...kenjitsuPattern.col1);
+  if (gyakutenPattern) col1Sources.push(...gyakutenPattern.col1);
+  if (oanaPattern) col1Sources.push(...oanaPattern.col1);
+  const col1 = Array.from(new Set([...col1Sources, ...indexTop1All, ...koboreumaCol1])).sort((a, b) => a - b);
+
+  // 2列目: 3パターンのcol2 + こぼれ馬（2着用）
+  const col2Sources: number[] = [];
+  if (kenjitsuPattern) col2Sources.push(...kenjitsuPattern.col2);
+  if (gyakutenPattern) col2Sources.push(...gyakutenPattern.col2);
+  if (oanaPattern) col2Sources.push(...oanaPattern.col2);
+  const col2 = Array.from(new Set([...col2Sources, ...koboreumaCol2])).sort((a, b) => a - b);
+
+  // 3列目: 全頭
   const col3 = allUma;
 
-  if (col1.length === 0 || col2.length < 2) return null;
+  if (col1.length === 0 || col2.length === 0) return null;
 
   const count = countSanrenpuku(col1, col2, col3);
   return {
     name: '一撃（三連複）', emoji: '⚡',
-    description: '逆転強化+各指標1位+3列目総流し',
+    description: '3パターン合体+各指標1位+こぼれ補完+3列目全流し',
     col1, col2, col3,
     count, amount: 0,
   };
@@ -619,14 +637,16 @@ export function generateFormations(
     }
   }
 
-  // 一撃パターン（逆転ベースの強化版）
+  // 一撃パターンv5（3パターン合体版）
+  const kenjitsuPattern = sanrentanKenjitsu(sh);
   const gyakutenPattern = sanrentanGyakuten(sh);
-  const ichigekiSt = sanrentanIchigeki(sh, horses, gyakutenPattern);
+  const oanaPattern = sanrentanOana(sh);
+  const ichigekiSt = sanrentanIchigeki(horses, kenjitsuPattern, gyakutenPattern, oanaPattern);
   if (ichigekiSt) {
     ichigekiSt.amount = ichigekiSt.count * unitAmount;
     sanrentan.push(ichigekiSt);
   }
-  const ichigekiSp = sanrenpukuIchigeki(sh, horses, gyakutenPattern);
+  const ichigekiSp = sanrenpukuIchigeki(horses, kenjitsuPattern, gyakutenPattern, oanaPattern);
   if (ichigekiSp) {
     ichigekiSp.amount = ichigekiSp.count * unitAmount;
     ichigekiSp.combos = listSanrenpukuCombos(ichigekiSp.col1, ichigekiSp.col2, ichigekiSp.col3);
