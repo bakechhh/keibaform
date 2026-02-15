@@ -225,6 +225,7 @@ export interface EfficiencyRank {
 
 // racing-logic.tsからインポートして使う
 export type { Badge, HorseAnalysis, RaceEvaluation, HorseWithRanks } from './lib/racing-logic';
+export type { SkipReason, SkipCheckResult } from './lib/skip-checker';
 
 export interface PastRace {
   date: string;
@@ -325,6 +326,7 @@ export interface Race {
   surface: '芝' | 'ダ';
   condition: string;
   trackCondition?: string; // 馬場状態（良、稍重、重、不良）
+  startTime?: string; // 発走時刻（例: "10:05"）
   grade: string;
   horses: Horse[];
 
@@ -335,6 +337,26 @@ export interface Race {
     color: string;
     bg: string;
     description: string;
+  };
+
+  // 見送りチェック結果
+  skipCheck?: {
+    shouldSkip: boolean;
+    confidence: number;
+    reasons: { code: string; label: string; detail: string; severity: '絶対見送り' | '警告' }[];
+    raceGrade: '最良' | '良い' | '普通' | '見送り';
+    summary: string;
+    details: {
+      showRateTop: number | null;
+      showRateSpread: number | null;
+      eliminatedCount: number;
+      totalHorses: number;
+      efficiencyACount: number;
+      favoriteOdds: number | null;
+    };
+    axisHorses: number[];
+    partnerHorses: number[];
+    eliminatedHorses: number[];
   };
 
   // レース結果（確定後のみ）

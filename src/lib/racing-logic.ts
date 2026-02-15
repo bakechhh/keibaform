@@ -9,6 +9,7 @@
  */
 
 import { RawHorse, HorseStats, EfficiencyRank } from '../types';
+import { checkSkip, SkipCheckResult } from './skip-checker';
 
 // ===== 設定値 =====
 export const CONFIG = {
@@ -401,6 +402,7 @@ export function evaluateRace(horses: HorseWithRanks[]): RaceEvaluation {
 export function analyzeRace(horses: HorseWithRanks[], oddsMap: Map<number, number>): {
   horses: HorseWithRanks[];
   evaluation: RaceEvaluation;
+  skipCheck: SkipCheckResult;
 } {
   // 1. オッズと効率を設定
   horses.forEach(h => {
@@ -422,7 +424,10 @@ export function analyzeRace(horses: HorseWithRanks[], oddsMap: Map<number, numbe
   // 5. レース判定
   const evaluation = evaluateRace(horses);
 
-  return { horses, evaluation };
+  // 6. 見送りチェック
+  const skipCheck = checkSkip(horses);
+
+  return { horses, evaluation, skipCheck };
 }
 
 // ===== UI表示用のヘルパー =====

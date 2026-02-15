@@ -157,7 +157,7 @@ function transformRaceData(
   }));
 
   // 競馬脳ロジックでレース分析を実行
-  const { horses: analyzedHorses, evaluation } = analyzeRace(horsesWithRanks, tanshoOddsMap);
+  const { horses: analyzedHorses, evaluation, skipCheck } = analyzeRace(horsesWithRanks, tanshoOddsMap);
 
   // 馬データをUI用に変換
   const horses: Horse[] = analyzedHorses.map((h: HorseWithRanks) => {
@@ -251,6 +251,7 @@ function transformRaceData(
     grade,
     horses,
     evaluation,
+    skipCheck,
   };
 }
 
@@ -465,13 +466,14 @@ export function useRaceData() {
       setLoading(true);
       setError(null);
 
-      // レースデータ、オッズデータ、馬場状態、レース結果、分析データを並列取得
-      const [raceResult, oddsResult, trackResult, resultsResult, analysisResult] = await Promise.all([
+      // レースデータ、オッズデータ、馬場状態、レース結果、分析データ、スケジュールを並列取得
+      const [raceResult, oddsResult, trackResult, resultsResult, analysisResult, schedulerResult] = await Promise.all([
         supabase.from('race_data_json').select('race_id, data'),
         supabase.from('race_odds_json').select('race_id, data'),
         supabase.from('track_conditions').select('race_id, track_condition'),
         supabase.from('race_results').select('race_id, data'),
         supabase.from('race_horse_analysis').select('race_id, data'),
+        supabase.from('scheduler_races').select('venue, race_num, start_time'),
       ]);
 
       if (raceResult.error) throw raceResult.error;
@@ -487,6 +489,9 @@ export function useRaceData() {
       }
       if (analysisResult.error) {
         console.warn('分析データ取得エラー:', analysisResult.error);
+      }
+      if (schedulerResult.error) {
+        console.warn('スケジュールデータ取得エラー:', schedulerResult.error);
       }
 
       // オッズをマップに変換
@@ -523,6 +528,14 @@ export function useRaceData() {
         analysisMap.set(row.race_id, data);
       }
 
+      // スケジュールデータをマップに変換（キー: "venue-race_num" → start_time）
+      const schedulerMap = new Map<string, string>();
+      for (const row of schedulerResult.data || []) {
+        if (row.venue && row.race_num && row.start_time) {
+          schedulerMap.set(`${row.venue}-${row.race_num}`, row.start_time);
+        }
+      }
+
       // レースデータを変換
       const transformedRaces: Race[] = [];
       let raceIndex = 0;
@@ -539,6 +552,13 @@ export function useRaceData() {
         // オッズ検索用にデータベースカラムのrace_idを使用（JSON内のrace_idとは異なる場合がある）
         race.originalRaceId = row.race_id;
         raceIndex++;
+
+        // 発走時刻を設定
+        const schedulerKey = `${rawRace.place}-${rawRace.round}`;
+        const startTime = schedulerMap.get(schedulerKey);
+        if (startTime) {
+          race.startTime = startTime;
+        }
 
         // 馬場状態を設定
         if (trackCondition) {

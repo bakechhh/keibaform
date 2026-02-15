@@ -19,6 +19,7 @@ const ICHIGEKI_SP_MAX = 8.0;   // 三連複: これ以上は対象外
 const ICHIGEKI_ST_MAX = 40.0;  // 三連単: これ以上は対象外
 const ICHIGEKI_SP_SEMI = 6.5;  // 三連複: 準勝負の上限
 const ICHIGEKI_ST_SEMI = 30.0; // 三連単: 準勝負の上限
+const ICHIGEKI_ST_MIN = 1.2;   // 三連単: これ未満は対象外（堅すぎる）
 
 export type IchigekiLevel = 'eligible' | 'semi' | 'ineligible';
 
@@ -176,10 +177,20 @@ export function checkIchigekiEligibility(
     threshold: `複<${ICHIGEKI_SP_MAX} 単<${ICHIGEKI_ST_MAX}`,
   };
 
-  const conditions = [cond1, cond2, cond3, cond4, cond5, cond7];
+  // ⑧ 一撃三連単合成オッズ下限チェック（堅すぎるレース除外）
+  const stUnder = ichigekiStSynOdds !== null && ichigekiStSynOdds < ICHIGEKI_ST_MIN;
+  const cond8: IchigekiCondition = {
+    label: '一撃三連単合成オッズ下限',
+    description: `一撃パターン: 三連単>=${ICHIGEKI_ST_MIN}倍`,
+    passed: !stUnder,
+    value: ichigekiStSynOdds !== null ? `単${ichigekiStSynOdds.toFixed(2)}` : '単-',
+    threshold: `単>=${ICHIGEKI_ST_MIN}`,
+  };
 
-  // コア条件: ①②③⑦（④⑤はソフト条件→弱マーカー、⑥堅実除外は撤廃）
-  const coreConditions = [cond1, cond2, cond3, cond7];
+  const conditions = [cond1, cond2, cond3, cond4, cond5, cond7, cond8];
+
+  // コア条件: ①②③⑦⑧（④⑤はソフト条件→弱マーカー、⑥堅実除外は撤廃）
+  const coreConditions = [cond1, cond2, cond3, cond7, cond8];
   const coreEligible = coreConditions.every(c => c.passed);
 
   // ④⑤は弱マーカー（買えるが信頼度低い）

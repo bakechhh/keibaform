@@ -14,6 +14,7 @@ import OddsView from './components/OddsView';
 import HorseComparisonModal from './components/HorseComparisonModal';
 import MultiHorseComparisonModal from './components/MultiHorseComparisonModal';
 import RaceAnalysisView from './components/RaceAnalysisView';
+import SkipCheckerPanel from './components/SkipChecker';
 import RaceFilterPanel from './components/RaceFilterPanel';
 import RaceNavigation from './components/RaceNavigation';
 import RaceResultsView from './components/RaceResultsView';
@@ -21,6 +22,7 @@ import ExpectedValueAnalysis from './components/ExpectedValueAnalysis';
 import BettingPreviewView from './components/BettingPreviewView';
 import SummaryView from './components/SummaryView';
 import ExportPanel from './components/ExportPanel';
+import NextRaceCards from './components/NextRaceCards';
 import FilterTemplateSelector from './components/FilterTemplateSelector';
 import { FilterCondition, applyFilterConditions } from './hooks/useFilterTemplates';
 import { useIchigekiScan } from './hooks/useIchigekiScan';
@@ -393,6 +395,17 @@ export default function App() {
               venues={venues}
               selectedVenue={selectedVenue}
               onSelect={setSelectedVenue}
+            />
+          </section>
+        )}
+
+        {/* Next Race Cards */}
+        {races.length > 0 && (
+          <section>
+            <NextRaceCards
+              races={races}
+              onSelect={setSelectedRace}
+              onVenueSelect={setSelectedVenue}
             />
           </section>
         )}
@@ -788,13 +801,20 @@ export default function App() {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
-                    className="p-4 rounded-2xl"
-                    style={{ backgroundColor: 'var(--bg-card)' }}
+                    className="space-y-4"
                   >
-                    <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
-                      レース分析
-                    </h3>
-                    <RaceAnalysisView horses={selectedRace.horses} raceDistance={selectedRace.distance} raceSurface={selectedRace.surface} />
+                    {/* 見送りチェッカー */}
+                    <SkipCheckerPanel race={selectedRace} />
+
+                    <div
+                      className="p-4 rounded-2xl"
+                      style={{ backgroundColor: 'var(--bg-card)' }}
+                    >
+                      <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
+                        レース分析
+                      </h3>
+                      <RaceAnalysisView horses={selectedRace.horses} raceDistance={selectedRace.distance} raceSurface={selectedRace.surface} />
+                    </div>
                   </motion.div>
                 )}
 

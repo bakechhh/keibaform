@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Ruler, Users, ChevronDown, Grid3X3, List } from 'lucide-react';
+import { MapPin, Ruler, Users, ChevronDown, Grid3X3, List, Clock } from 'lucide-react';
 import { Race } from '../types';
+import { SkipBadge } from './SkipChecker';
 
 interface RaceSelectorProps {
   races: Race[];
@@ -45,11 +46,17 @@ export default function RaceSelector({ races, selectedRace, onSelect }: RaceSele
               color: 'var(--text-primary)',
             }}
           >
-            {races.map((race, index) => (
-              <option key={`${race.id}-${index}`} value={race.id}>
-                {race.location}{race.round}R {race.name} ({race.surface}{race.distance}m / {race.horses.length}頭) {race.evaluation?.label || ''}
-              </option>
-            ))}
+            {races.map((race, index) => {
+              const skipLabel = race.skipCheck?.shouldSkip ? ' [見送り]'
+                : race.skipCheck && race.skipCheck.reasons.length > 0 ? ' [注意]'
+                : race.skipCheck ? ' [買い]'
+                : '';
+              return (
+                <option key={`${race.id}-${index}`} value={race.id}>
+                  {race.startTime ? `${race.startTime} ` : ''}{race.location}{race.round}R {race.name} ({race.surface}{race.distance}m / {race.horses.length}頭) {race.evaluation?.label || ''}{skipLabel}
+                </option>
+              );
+            })}
           </select>
           <ChevronDown
             className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none"
@@ -98,6 +105,7 @@ export default function RaceSelector({ races, selectedRace, onSelect }: RaceSele
                     {selectedRace.evaluation.label}
                   </span>
                 )}
+                <SkipBadge race={selectedRace} />
               </div>
               <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
                 {selectedRace.name}
@@ -107,6 +115,12 @@ export default function RaceSelector({ races, selectedRace, onSelect }: RaceSele
                   <MapPin className="w-4 h-4" />
                   {selectedRace.location}{selectedRace.round}R
                 </span>
+                {selectedRace.startTime && (
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    {selectedRace.startTime}
+                  </span>
+                )}
                 <span className="flex items-center gap-1">
                   <Ruler className="w-4 h-4" />
                   {selectedRace.surface}{selectedRace.distance}m
@@ -134,6 +148,15 @@ export default function RaceSelector({ races, selectedRace, onSelect }: RaceSele
           {selectedRace.evaluation && (
             <p className="mt-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
               {selectedRace.evaluation.description}
+            </p>
+          )}
+          {selectedRace.skipCheck && (
+            <p className="mt-1 text-xs" style={{
+              color: selectedRace.skipCheck.shouldSkip ? '#ef4444'
+                : selectedRace.skipCheck.reasons.length > 0 ? '#f59e0b'
+                : '#22c55e'
+            }}>
+              {selectedRace.skipCheck.summary}
             </p>
           )}
         </motion.div>
@@ -169,9 +192,15 @@ export default function RaceSelector({ races, selectedRace, onSelect }: RaceSele
                     {race.evaluation.label}
                   </span>
                 )}
+                <SkipBadge race={race} />
               </div>
               <div className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
                 {race.round}R {race.name}
+                {race.startTime && (
+                  <span className="ml-1 text-xs font-normal" style={{ color: 'var(--text-secondary)' }}>
+                    {race.startTime}
+                  </span>
+                )}
               </div>
               <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                 {race.surface}{race.distance}m / {race.horses.length}頭

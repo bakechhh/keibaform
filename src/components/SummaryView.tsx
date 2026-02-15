@@ -6,6 +6,7 @@ import { IchigekiScanResult } from '../hooks/useIchigekiScan';
 import CrossRaceComparison from './summary/CrossRaceComparison';
 import TodaysPayouts from './summary/TodaysPayouts';
 import RaceReview from './summary/RaceReview';
+import DailySkipSummary from './summary/DailySkipSummary';
 
 interface SummaryViewProps {
   races: Race[];
@@ -14,12 +15,13 @@ interface SummaryViewProps {
   onRaceSelect: (race: Race) => void;
 }
 
-type SummaryTab = 'comparison' | 'payouts' | 'review';
+type SummaryTab = 'skip_check' | 'comparison' | 'payouts' | 'review';
 
 export default function SummaryView({ races, ichigekiScanResults, getResultByVenueRound, onRaceSelect }: SummaryViewProps) {
-  const [tab, setTab] = useState<SummaryTab>('comparison');
+  const [tab, setTab] = useState<SummaryTab>('skip_check');
 
   const tabs: { key: SummaryTab; label: string }[] = [
+    { key: 'skip_check', label: '見送りチェック' },
     { key: 'comparison', label: 'レース間比較' },
     { key: 'payouts', label: '払戻一覧' },
     { key: 'review', label: '振り返り' },
@@ -48,6 +50,12 @@ export default function SummaryView({ races, ichigekiScanResults, getResultByVen
       </div>
 
       {/* Content */}
+      {tab === 'skip_check' && (
+        <DailySkipSummary
+          races={races}
+          onRaceSelect={onRaceSelect}
+        />
+      )}
       {tab === 'comparison' && (
         <CrossRaceComparison
           races={races}
