@@ -15,7 +15,7 @@ export const SKIP_CONFIG = {
   showRateTopMin: 0.70,        // show_rate 1位がこれ未満 → 見送り
   showRateSpreadMin: 0.10,     // 上位5頭のshow_rate差がこれ未満 → 見送り（団子状態）
   minEliminatedCount: 4,       // 消し馬がこれ未満 → 見送り
-  minHorses: 8,                // 出走頭数がこれ以下 → 見送り
+  minHorses: 9,                // 出走頭数がこれ以下 → 見送り
 
   // 馬分類
   eliminateBottomRatio: 1 / 3, // 下位1/3を消し対象
@@ -23,6 +23,7 @@ export const SKIP_CONFIG = {
   // オッズ効率帯（単勝オッズ）
   oddsEfficiencyA: 4.0,        // これ以上が「効率A」= 最も旨味ある投資先
   oddsEfficiencyTooLow: 1.5,   // 1番人気がこれ未満で妙味なし → 見送り候補
+  lowOddsSkipThreshold: 2.5,   // 単勝がこれ未満の馬 → 低オッズ判定対象
 };
 
 // ===== 見送り理由 =====
@@ -94,7 +95,14 @@ export function checkSkip(horses: HorseWithRanks[]): SkipCheckResult {
     .filter(h => h.analysis?.status === 'delete')
     .map(h => h.horse_number);
 
+  const safeHorses = horses
+    .filter(h => h.analysis?.status === 'safe')
+    .map(h => h.horse_number);
+
   const eliminatedCount = eliminatedHorses.length;
+  const safeCount = safeHorses.length;
+  // 非有力馬 = 消し + 紐（モデルが「上位ではない」と判断した馬の数）
+  const nonContenderCount = eliminatedCount + safeCount;
 
   // --- 効率A以上の馬 ---
   const efficiencyAHorses = horses.filter(h => {
@@ -131,12 +139,12 @@ export function checkSkip(horses: HorseWithRanks[]): SkipCheckResult {
     });
   }
 
-  // 3. 消し馬が少ない
-  if (eliminatedCount < SKIP_CONFIG.minEliminatedCount) {
+  // 3. 絞り込みが不十分（消し馬＋紐が少ない＝全馬が有力候補＝予測が困難）
+  if (nonContenderCount < SKIP_CONFIG.minEliminatedCount) {
     reasons.push({
       code: '消し不足',
-      label: '消し馬が少ない',
-      detail: `消し馬: ${eliminatedCount}頭（最低${SKIP_CONFIG.minEliminatedCount}頭必要）`,
+      label: '絞り込みが不十分',
+      detail: `消し${eliminatedCount}頭＋紐${safeCount}頭＝${nonContenderCount}頭（最低${SKIP_CONFIG.minEliminatedCount}頭必要）`,
       severity: '絶対見送り',
     });
   }
@@ -151,9 +159,41 @@ export function checkSkip(horses: HorseWithRanks[]): SkipCheckResult {
     });
   }
 
+  // 5. 低オッズ馬がAI上位 → 堅すぎて回収が合わない
+  const lowOddsHorses = horses.filter(h => {
+    const odds = h.tanshoOdds ?? 99.9;
+    return odds > 0 && odds < SKIP_CONFIG.lowOddsSkipThreshold;
+  });
+
+  if (lowOddsHorses.length > 0) {
+    const lowOddsHorse = lowOddsHorses.reduce((a, b) =>
+      (a.tanshoOdds ?? 99.9) < (b.tanshoOdds ?? 99.9) ? a : b
+    );
+    const lowOddsVal = lowOddsHorse.tanshoOdds ?? 99.9;
+    const lowOddsWinRank = lowOddsHorse.predictions?.win_rate_rank ?? 99;
+
+    if (lowOddsWinRank <= 2) {
+      // AI評価でも上位 → 堅いレース → 見送り
+      reasons.push({
+        code: '低オッズ',
+        label: '低オッズ馬がAI上位',
+        detail: `単勝${lowOddsVal.toFixed(1)}倍の馬がAI勝率${lowOddsWinRank}位 → 堅いレース`,
+        severity: '絶対見送り',
+      });
+    } else {
+      // AI評価では下位 → 荒れる可能性 → 警告のみ
+      reasons.push({
+        code: '低オッズ注意',
+        label: '低オッズ馬あり（AI評価低め）',
+        detail: `単勝${lowOddsVal.toFixed(1)}倍の馬がAI勝率${lowOddsWinRank}位 → 波乱含み`,
+        severity: '警告',
+      });
+    }
+  }
+
   // ===== 警告条件 =====
 
-  // 5. 軸不在
+  // 6. 軸不在
   if (axisHorses.length === 0) {
     reasons.push({
       code: '軸不在',
@@ -163,7 +203,7 @@ export function checkSkip(horses: HorseWithRanks[]): SkipCheckResult {
     });
   }
 
-  // 6. 妙味なし（効率A以上の馬が0頭）
+  // 7. 妙味なし（効率A以上の馬が0頭）
   // 効率A以上かつ評価が高い馬（analysis.isBuy=true）で判定
   const valuableEffAHorses = efficiencyAHorses.filter(h => h.analysis?.isBuy);
   if (valuableEffAHorses.length === 0) {
@@ -175,7 +215,7 @@ export function checkSkip(horses: HorseWithRanks[]): SkipCheckResult {
     });
   }
 
-  // 7. 堅すぎ（1番人気 < 1.5倍 かつ 2番人気以下に評価高い馬なし）
+  // 8. 堅すぎ（1番人気 < 1.5倍 かつ 2番人気以下に評価高い馬なし）
   if (favoriteOdds !== null && favoriteOdds < SKIP_CONFIG.oddsEfficiencyTooLow) {
     // 2番人気以下で軸級の馬がいるか
     const nonFavAxisHorses = horses.filter(h => {
