@@ -14,7 +14,7 @@ import { checkSkip, SkipCheckResult } from './skip-checker';
 // ===== 設定値 =====
 export const CONFIG = {
   MIN_FINAL_SCORE: 45.0,  // 紐（Safe）判定用の基準
-  SAFE_AI_SCORE: 0.45,    // 紐（Safe）判定用のAI基準（単勝AI）
+  SAFE_AI_SCORE: 0.45,    // 紐（Safe）判定用のAI基準（複勝AI）
   EFFICIENCY_LINE: 400,   // 効率ライン（回収率%）= 単勝4倍相当
 };
 
@@ -234,15 +234,27 @@ export function evaluateHorse(horse: HorseWithRanks): HorseAnalysis {
   // C. 総合4位以下（紐・穴）★厳格フィルタ適用
   else {
     const finalSc = idx.final_score;
+    // いずれかの指標が50以上なら能力あり
+    const hasAbility =
+      (idx.mining_index ?? 0) >= 50.0 ||
+      (idx.corrected_time_deviation ?? 0) >= 50.0 ||
+      (idx.zi_deviation ?? 0) >= 50.0;
     let isQualified = false;
 
     if (powerRank <= 5 && gapCount >= 1) {
       isQualified = true;
     } else {
+      // 1. スコア40未満: 論外 (ただし能力指標>=50かつGap>=1なら救済)
       if (finalSc < 40.0) {
-        isQualified = false;
+        if (hasAbility && gapCount >= 1) {
+          isQualified = true;
+        } else {
+          isQualified = false;
+        }
       } else if (finalSc < 50.0) {
         if (gapCount >= 3 || maxGap >= 5) {
+          isQualified = true;
+        } else if (hasAbility && gapCount >= 1) {
           isQualified = true;
         }
       } else {
@@ -257,7 +269,8 @@ export function evaluateHorse(horse: HorseWithRanks): HorseAnalysis {
     } else {
       const isSafe =
         (finalSc >= CONFIG.MIN_FINAL_SCORE) ||
-        (preds.win_rate >= CONFIG.SAFE_AI_SCORE);
+        (preds.show_rate >= CONFIG.SAFE_AI_SCORE) ||
+        hasAbility;
 
       if (isSafe) {
         result.status = 'safe';
